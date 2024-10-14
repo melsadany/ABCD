@@ -1,0 +1,37 @@
+#! /bin/bash
+#$ -cwd
+#$ -q all.q
+#$ -pe smp 28
+#$ -N ABCD-T1-fs
+#$ -o logs/$JOB_NAME.$TASK_ID.log
+#$ -j y
+#$ -ckpt user
+#$ -t 141-7664
+
+# make sure to have packages "foreach" and "doParallel" installed in R. there's nothing special about this conda env except these two. 
+conda activate ENA
+module load FSL
+module load FreeSurfer
+
+# enter number of cores used here
+numCores=14
+
+# the MAIN_DIR is a directory for all subjects
+export MAIN_DIR=/Dedicated/jmichaelson-wdata/msmuhammad/projects/ABCD/MRI
+export RAWDATA_DIR=/Dedicated/jmichaelson-sdata/ABCD/abcd_release_3_0/imaging/data/ABCD_T1/nii
+
+#get a list of all T1 files in rawdata dir. Assuming that this directory only includes T1.nii.gz files. 
+T1LS=($(ls $RAWDATA_DIR/*.nii.gz))
+NT1LS=${#T1LS[@]}
+
+# subject ID. mainly used to create a directory for each subject's output. This number will be based on files order in rawdata 
+# export subject=${SGE_TASK_ID}
+cd $MAIN_DIR 
+
+# path to your subject T1 nii
+export subjT1=${T1LS[$((${SGE_TASK_ID}-1))]}
+
+OUT_DIR=$MAIN_DIR/derivatives
+
+RSCRIPT_F=/Dedicated/jmichaelson-wdata/msmuhammad/projects/ABCD/MRI/01_ABCD-T1-fs.R
+Rscript $RSCRIPT_F $MAIN_DIR $RAWDATA_DIR $subjT1 $OUT_DIR $numCores
