@@ -34,6 +34,7 @@ abcd.cog <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
   select(IID = src_subject_id, eventname, ends_with("agecorrected")) %>%
   inner_join(abcd.demo)
 
+rpoe.cog.raw <- read_rds("../../RPOE/shared_data/data/m1m2-sex-corrected.rds")
 rpoe.cog <- read_rds("../../RPOE/shared_data/data/m1m2-sex-corrected.rds") %>%
   select(te_id,
          nihtbx_picvocab_agecorrected = picture_vocabulary_age_corrected_standard_score,
@@ -570,9 +571,9 @@ ggsave("figs/predicted-ASD_RPOE_DTI.png", bg = "white",
 
 # DTI
 # NOTHING
-# t3 %>%
-#   left_join(rpoe.d.mri.fa3) %>%
-#   left_join(rpoe.d.mri.md3) %>%
+# t3 %>% select(-FSIQ) %>%
+#   inner_join(rpoe.d.mri.fa3) %>%
+#   inner_join(rpoe.d.mri.md3) %>%
 #   pivot_longer(cols = c(colnames(rpoe.d.mri.fa3)[-c(1:3)], colnames(rpoe.d.mri.md3)[-c(1:3)])) %>%
 #   # filter(!grepl("SuperiorLongi|Uncinate", name)) %>% # those are not significant
 #   mutate(name = sub("ProjectionBasalGanglia_", "", name),
@@ -589,16 +590,70 @@ ggsave("figs/predicted-ASD_RPOE_DTI.png", bg = "white",
 #                        label = ifelse(..p.value.. < 0.1, label, "")),
 #                    show.legend = F, na.rm = T) +
 #   scale_color_manual(values = redblu.col[c(2,1)]) +
-#   ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
+#   ggh4x::facet_grid2(rows = vars(name), cols = vars(metric),
 #                      scales = "free") +
 #   labs(x = "predicted CP", y = "DTI value") +
 #   bw.theme +
 #   theme(strip.text.y.right = element_text(angle = 0))
+
+
 ################################################################################
 ################################################################################
 ################################################################################
+# check how cognition and pred_ASD interact
+
+tmp <- t3 %>% select(-FSIQ) %>%
+  inner_join(rpoe.d.mri.fa3) %>%
+  inner_join(rpoe.d.mri.md3) %>%
+  inner_join(rpoe.cog.s)
+
+summary(glm(dti_fa__Commissure_CorpusCallosum ~ pred_ASD*PSI_composite_score, 
+            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, 
+                                  colnames(rpoe.cog.s)[c(13:16)])))
+summary(glm(FSIQ ~ pred_ASD*dti_fa__Commissure_CorpusCallosum, 
+            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, 
+                                  ASD_dx,
+                                  colnames(rpoe.cog.s)[c(13:16)])))
+
+
+cat2 <- c("High ASD, High FSIQ","High ASD, Low FSIQ","Low ASD, High FSIQ","Low ASD, Low FSIQ")
+t4 <- t3 %>% select(-FSIQ) %>%
+  inner_join(rpoe.d.mri.fa3) %>%
+  inner_join(rpoe.d.mri.md3) %>%
+  inner_join(rpoe.cog.s) %>% 
+  mutate(cat2 = case_when(c(pred_ASD >= median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "High ASD, High FSIQ",
+                          c(pred_ASD >= median(pred_ASD) & FSIQ < median(FSIQ)) ~ "High ASD, Low FSIQ",
+                          c(pred_ASD < median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "Low ASD, High FSIQ",
+                          c(pred_ASD < median(pred_ASD) & FSIQ < median(FSIQ)) ~ "Low ASD, Low FSIQ"))
+t4 %>%
+  pivot_longer(cols = contains("Corpus")) %>%
+  mutate(name = sub("_Commissure_", "", name),
+         name = sub("dti_fa", "FA_", name),
+         name = sub("md_", "MD_", name)) %>%
+  ggplot(aes(x = cat2, y = value, fill = cat2)) +
+  geom_violin(show.legend = F) + geom_boxplot(fill = "white", width = 0.2) +
+  ggpubr::stat_compare_means(vjust = 0.35, size = 3.5,
+                             comparisons = combn(cat2, 2, simplify = F)) +
+  scale_fill_manual(values = six.colors) +
+  facet_wrap(~name, scales = "free_y", nrow = 2) +
+  labs(x= "", y = "DTI value (residualized for age and sex)",
+       caption = paste0("n(", cat2[1], "): ", sum(t4$cat2 == cat2[1]), "\n",
+                        "n(", cat2[2], "): ", sum(t4$cat2 == cat2[2]), "\n",
+                        "n(", cat2[3], "): ", sum(t4$cat2 == cat2[3]), "\n",
+                        "n(", cat2[4], "): ", sum(t4$cat2 == cat2[4]), "\n")) +
+  bw.theme +
+  theme(axis.text.x.bottom =  element_text(angle = 45, hjust = 1))
+ggsave("figs/predicted-ASD_RPOE_DTI-2e.png", bg = "white",
+       width = 5, height = 8, units = "in", dpi = 360)
+# SEM
+library(lavaan)
+
+
 ################################################################################
 ################################################################################
+
+
+
 ################################################################################
 ################################################################################
 ################################################################################
