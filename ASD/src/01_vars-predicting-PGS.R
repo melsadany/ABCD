@@ -429,6 +429,31 @@ p2 <- rpoe.2 %>%
   bw.theme
 ################################################################################
 ################################################################################
+################################################################################
+# train on cognition and behavior to predict ASD PGS
+t8 <- abcd.all %>%
+  select(ASD, colnames(abcd.cog2)[-c(1,2)], starts_with(c("syn", "dsm"))) %>% ungroup()
+
+glm.model.asd2 <- glm(ASD ~ ., data = t8 %>% mutate(ASD = as.numeric(ASD)))
+# apply on RPOE
+predictions.rpoe.glm.asd2 <- predict(glm.model.asd2,
+                                     rpoe.2 %>% select(colnames(t8)[-1]))
+p8 <- rpoe.2 %>%
+  mutate(pred = predictions.rpoe.glm.asd2) %>%
+  ggplot(aes(x=ASD_dx, y = pred, fill = ASD_dx)) +
+  geom_violin(show.legend = F) +
+  geom_boxplot(width = 0.2, fill = "white") +
+  ggpubr::stat_compare_means() +
+  scale_fill_manual(values = boxplot.colors) +
+  labs(y = "predcited ASD using NIH-TB") +
+  bw.theme
+################################################################################
+################################################################################
+# save the models
+save(glm.model.asd, glm.model.cp, file = "data/derivatives/glm-models-ASD-CP.rda")
+################################################################################
+################################################################################
+################################################################################
 # plot predictions on bothe axes, and color based on category
 groups <- c("2e", "ASD, not gifted", "gifted, no dx", "no dx, not gifted")
 # groups <- c("2e", "either dx, not gifted", "gifted, no dx", "no dx, not gifted")
@@ -564,6 +589,70 @@ ggsave("figs/predicted-ASD_RPOE_DTI.png", bg = "white",
 #   bw.theme +
 #   theme(strip.text.y.right = element_text(angle = 0))
 
+# language
+rpoe.psvc <- read_rds("../../RPOE/language/data/derivatives/summarized-metrics-psvc.rds")
+inner_join(t3, rpoe.psvc) %>%
+  pivot_longer(cols = colnames(rpoe.psvc)[-1]) %>%
+  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+  ggplot(aes(x=pred_val, y = value)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+                       label = ifelse(..p.value.. < 0.1, label, "")),
+                   show.legend = F, na.rm = T, size = 3) +
+  scale_color_manual(values = redblu.col[c(2,1)]) +
+  ggh4x::facet_grid2(rows = vars(name), 
+                     cols = vars(pred), 
+                     scales = "free") +
+  labs(x = "predicted value", y = "language metric value") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
+ggsave("figs/predicted-ASD-CP_RPOE_language.png", bg = "white",
+       width = 6, height = 14, units = "in", dpi = 360)
+
+
+# falff
+inner_join(t3, rpoe.f.mri.falff2) %>%
+  pivot_longer(cols = colnames(rpoe.f.mri.falff2)[-1]) %>%
+  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+  ggplot(aes(x=pred_val, y = value)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+                       label = ifelse(..p.value.. < 0.1, label, "")),
+                   show.legend = F, na.rm = T, size = 3) +
+  scale_color_manual(values = redblu.col[c(2,1)]) +
+  ggh4x::facet_grid2(rows = vars(name), 
+                     cols = vars(pred), 
+                     scales = "free") +
+  labs(x = "predicted value", y = "fALFF value") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
+ggsave("figs/predicted-ASD-CP_RPOE_fALFF.png", bg = "white",
+       width = 5, height = 9, units = "in", dpi = 360)
+
+
+# reho
+inner_join(t3, rpoe.f.mri.reho2) %>%
+  pivot_longer(cols = colnames(rpoe.f.mri.reho2)[-1]) %>%
+  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+  ggplot(aes(x=pred_val, y = value)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+                       label = ifelse(..p.value.. < 0.1, label, "")),
+                   show.legend = F, na.rm = T, size = 3) +
+  scale_color_manual(values = redblu.col[c(2,1)]) +
+  ggh4x::facet_grid2(rows = vars(name), 
+                     cols = vars(pred), 
+                     scales = "free") +
+  labs(x = "predicted value", y = "ReHo value") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
+ggsave("figs/predicted-ASD-CP_RPOE_ReHo.png", bg = "white",
+       width = 5, height = 9, units = "in", dpi = 360)
+
+
 
 ################################################################################
 ################################################################################
@@ -605,22 +694,23 @@ ggsave("figs/predicted-ASD_RPOE_DTI.png", bg = "white",
 tmp <- t3 %>% select(-FSIQ) %>%
   inner_join(rpoe.d.mri.fa3) %>%
   inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.cog.s)
+  inner_join(rpoe.cog.raw)
 
-summary(glm(dti_fa__Commissure_CorpusCallosum ~ pred_ASD*PSI_composite_score, 
-            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, 
-                                  colnames(rpoe.cog.s)[c(13:16)])))
+summary(glm(dti_fa__Commissure_CorpusCallosum ~ pred_ASD*pred_CP, 
+            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, 
+                                  pred_ASD, pred_CP,
+                                  colnames(rpoe.cog.raw)[c(13:16)])))
 summary(glm(FSIQ ~ pred_ASD*dti_fa__Commissure_CorpusCallosum, 
             data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, 
                                   ASD_dx,
-                                  colnames(rpoe.cog.s)[c(13:16)])))
+                                  colnames(rpoe.cog.raw)[c(13:16)])))
 
 
 cat2 <- c("High ASD, High FSIQ","High ASD, Low FSIQ","Low ASD, High FSIQ","Low ASD, Low FSIQ")
 t4 <- t3 %>% select(-FSIQ) %>%
   inner_join(rpoe.d.mri.fa3) %>%
   inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.cog.s) %>% 
+  inner_join(rpoe.cog.raw) %>% 
   mutate(cat2 = case_when(c(pred_ASD >= median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "High ASD, High FSIQ",
                           c(pred_ASD >= median(pred_ASD) & FSIQ < median(FSIQ)) ~ "High ASD, Low FSIQ",
                           c(pred_ASD < median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "Low ASD, High FSIQ",
@@ -649,6 +739,147 @@ ggsave("figs/predicted-ASD_RPOE_DTI-2e.png", bg = "white",
 library(lavaan)
 
 
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+# theoretical mapping of pred_CP and pred_ASD on one axis
+t3 %>%
+  ggplot(aes(x=pred_ASD, y = pred_CP)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "glm") +
+  ggpubr::stat_cor(method = "spearman")
+
+pc <- princomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
+pc$scores[,1]
+t3 %>%
+  mutate(pc_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_ASD, y = pc_score)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor()
+t3 %>%
+  mutate(pc_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_CP, y = pc_score)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm") +
+  ggpubr::stat_cor()
+
+
+t3 %>%
+  mutate(pc_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_ASD, y = pred_CP, size = abs(pc_score))) +
+  geom_point(shape = 1, aes(color = as.factor(sign(pc_score)))) +
+  geom_vline(xintercept = 0, color = "pink", linetype = 2) +
+  geom_hline(yintercept = 0, color = "pink", linetype = 2) +
+  scale_color_manual(values = redblu.col[c(2,1)],
+                     name = "PC-score sign") +
+  scale_size_continuous(name = "abs(PC-score)") +
+  bw.theme
+ggsave("figs/predicted-ASD-CP_PC1-score.png", bg = "white",
+       width = 7, height = 6, units = "in", dpi = 360)
+
+# try to correlate that combined score with other MRI metrics
+
+t3 %>%
+  mutate(pc_score = pc$scores[,1]) %>%
+  inner_join(rpoe.d.mri.fa3) %>%
+  inner_join(rpoe.d.mri.md3) %>%
+  pivot_longer(cols = c(colnames(rpoe.d.mri.fa3)[-c(1:3)], colnames(rpoe.d.mri.md3)[-c(1:3)])) %>%
+  filter(grepl("Corpus|TractR|Inferior", name)) %>% # those are not significant
+  mutate(name = sub("ProjectionBasalGanglia_", "", name),
+         name = sub("Association_", "", name),
+         name = sub("Commissure_", "", name),
+         metric = case_when(grepl("dti_fa*",name) ~ "FA",
+                            grepl("md_*",name) ~ "MD"),
+         name = sub(".*__", "", name)) %>%
+  drop_na(pc_score, value) %>%
+  ggplot(aes(x=pc_score, y = value)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+                       label = ifelse(..p.value.. < 0.1, label, "")),
+                   show.legend = F, na.rm = T) +
+  scale_color_manual(values = redblu.col[c(2,1)]) +
+  ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
+                     scales = "free") +
+  labs(x = "PC1 score", y = "DTI value") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
+ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
+       width = 7, height = 8.5, units = "in", dpi = 360)
+
+# 
+# m0 <- lm(pred_CP ~ pred_ASD, data = t3)
+# slope0 <- coef(m0)[2]  # This is 'm'
+# intercept0 <- coef(m0)[1]  # This is 'b'
+# projected_x0 <- (t3$pred_ASD + slope0 * (t3$pred_CP - intercept0)) / (1 + slope0^2)
+# projected_y0 <- slope0 * projected_x0 + intercept0
+# # Calculate distance from origin (0,0) to the projected point
+# distances0 <- sqrt(projected_x0^2 + projected_y0^2)
+# # Get the sign based on whether the original point is above or below the line
+# signed_distances0 <- distances0 * sign(t3$pred_CP - (slope0 * t3$pred_ASD + intercept0))
+# 
+# t3 %>%
+#   mutate(distance = signed_distances0) %>%
+#   ggplot(aes(x = pred_CP, y = distance)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "glm") +
+#   ggpubr::stat_cor(method = "spearman")
+# 
+# t3 %>%
+#   mutate(distance = signed_distances0) %>%
+#   ggplot(aes(x = pred_ASD, y = distance, color = ASD_dx)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "glm") +
+#   ggpubr::stat_cor(method = "spearman")
+#
+
+
+################################################################################
+################################################################################
+################################################################################
 ################################################################################
 ################################################################################
 
