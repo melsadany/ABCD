@@ -793,32 +793,36 @@ t3 %>%
 
 pc <- princomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
 pc$scores[,1]
-t3 %>%
-  mutate(pc_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_ASD, y = pc_score)) +
+pp1 <- t3 %>%
+  mutate(pc1_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_ASD, y = pc1_score)) +
   geom_point(shape = 1) +
   geom_smooth(method = "lm") +
-  ggpubr::stat_cor()
-t3 %>%
-  mutate(pc_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_CP, y = pc_score)) +
+  ggpubr::stat_cor() +
+  bw.theme
+pp2 <- t3 %>%
+  mutate(pc1_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_CP, y = pc1_score)) +
   geom_point(shape = 1) +
   geom_smooth(method = "lm") +
-  ggpubr::stat_cor()
+  ggpubr::stat_cor() +
+  bw.theme
 
 
-t3 %>%
-  mutate(pc_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_ASD, y = pred_CP, size = abs(pc_score))) +
-  geom_point(shape = 1, aes(color = as.factor(sign(pc_score)))) +
+pp3 <- t3 %>%
+  mutate(pc1_score = pc$scores[,1]) %>%
+  ggplot(aes(x=pred_ASD, y = pred_CP, size = abs(pc1_score))) +
+  geom_point(shape = 1, aes(color = as.factor(sign(pc1_score)))) +
   geom_vline(xintercept = 0, color = "pink", linetype = 2) +
   geom_hline(yintercept = 0, color = "pink", linetype = 2) +
   scale_color_manual(values = redblu.col[c(2,1)],
                      name = "PC-score sign") +
   scale_size_continuous(name = "abs(PC-score)") +
   bw.theme
+
+patchwork::wrap_plots(pp1, pp2, pp3, ncol = 1)
 ggsave("figs/predicted-ASD-CP_PC1-score.png", bg = "white",
-       width = 7, height = 6, units = "in", dpi = 360)
+       width = 7, height = 13, units = "in", dpi = 360)
 
 # try to correlate that combined score with other MRI metrics
 
