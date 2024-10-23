@@ -294,13 +294,17 @@ rm(rpoe.f.mri.reho)
 # mental health #
 abcd.mh <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
                            "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/mental-health/mh_p_cbcl.csv")) %>%
-  select(IID = src_subject_id,2, contains("syn"), contains("dsm5"))
+  mutate(critical_1_r = cbcl_q06_p + cbcl_q15_p + cbcl_q18_p + cbcl_q40_p + 
+           cbcl_q57_p + cbcl_q59_p + cbcl_q67_p + cbcl_q70_p + 
+           cbcl_q72_p + cbcl_q91_p + cbcl_q105_p + cbcl_q107_p,
+         critical_2_r = cbcl_q18_p + cbcl_q91_p) %>%
+  select(IID = src_subject_id,2, contains("syn"), contains("dsm5"), contains("critical"))
 abcd.mh2 <- abcd.mh[,c(T,T,grepl("_r$", colnames(abcd.mh)[-c(1:2)]))] %>%
   filter(grepl("baseline", eventname)) %>% drop_na() %>%
   inner_join(abcd.demo) %>%
   rename_all(.funs = function(x) sub("cbcl_scr_", "", x))
 abcd.mh3 <- abcd.mh2 %>%
-  mutate_at(.vars = vars(starts_with(c("syn", "dsm5"))),
+  mutate_at(.vars = vars(starts_with(c("syn", "dsm5", "critical"))),
             .funs = function(x){
               df <- abcd.mh2 %>% 
                 mutate(y = x) %>%
@@ -327,7 +331,7 @@ abcd.mh4 <- abcd.mh3 %>%
   filter(grepl("baseline", eventname)) %>%
   select(IID, any_of(colnames(rpoe.mh)))
 
-rm(abcd.mh);rm(abcd.mh2);rm(abcd.mh3)
+rm(abcd.mh);rm(abcd.mh2)
 
 #######
 # PGS #
@@ -792,6 +796,10 @@ t3 %>%
   ggpubr::stat_cor(method = "spearman")
 
 pc <- princomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
+
+pc2 <- prcomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
+
+
 pc$scores[,1]
 pp1 <- t3 %>%
   mutate(pc1_score = pc$scores[,1]) %>%
@@ -886,9 +894,26 @@ ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
 ################################################################################
 ################################################################################
 ################################################################################
+# correlate ASD PGS with DTI in ABCD
+abcd.d.mri.fa3 %>%
+  inner_join(abcd.pgs) %>%
+  pivot_longer(cols = starts_with("dti")) %>%
+  mutate(name = sub("dti_fa__", "", sub("Association_", "",
+                                      name)),
+         name = sub("ProjectionBasalGanglia_", "", name)) %>%
+  filter(abs(value) <=6) %>%
+  ggplot(aes(x=value, y = ASD)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+                       label = ifelse(..p.value.. < 0.1, label, "")),
+                   show.legend = F, na.rm = T) +
+  scale_color_manual(values = redblu.col[c(2,1)]) +
+  facet_wrap(~name, scales = "free") +
+  labs(x = "DTI value", y = "ASD_PGS") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
 
-
-
 ################################################################################
 ################################################################################
 ################################################################################
@@ -903,6 +928,33 @@ ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
 ################################################################################
 ################################################################################
 ################################################################################
+# correlate FA_CC with critical score
+abcd.mh3 %>%
+  select(IID, starts_with("critical")) %>%
+  inner_join(abcd.d.mri.fa3 %>%
+               select(IID, FA_CC = dti_fa__Commissure_CorpusCallosum)) %>%
+  inner_join(abcd.d.mri.md3 %>%
+               select(IID, MD_CC = md__Commissure_CorpusCallosum)) %>%
+  pivot_longer(cols = starts_with("critical"), names_to = "critical_type", values_to = "critical_score") %>%
+  group_by(critical_type) %>% mutate(critical_category = case_when(critical_score > median(critical_score) ~ "High",
+                                                                   critical_score == median(critical_score) ~ "Median",
+                                                                   critical_score < median(critical_score) ~ "Low"),
+                                     critical_category = factor(critical_category, levels = c("High", "Median", "Low"))) %>% ungroup() %>%
+  pivot_longer(cols = c(FA_CC, MD_CC), names_to = "DTI_metric", values_to = "DTI_score") %>%
+  filter(abs(DTI_score) <=5) %>%
+  ggplot(aes(x=critical_category, y = DTI_score, fill = critical_category)) +
+  geom_violin(show.legend = F) +
+  geom_boxplot(fill = "white", width = 0.2) +
+  ggpubr::stat_compare_means(comparisons = combn(x = c("High", "Median", "Low"), 2, simplify = F)) +
+  scale_fill_manual(values = six.colors) +
+  ggh4x::facet_grid2(rows = vars(DTI_metric), 
+                     cols = vars(critical_type), 
+                     scales = "free") +
+  labs(x = "critical score", y = "DTI score") +
+  bw.theme +
+  theme(strip.text.y.right = element_text(angle = 0))
+ggsave("figs/DTI-critical.png", bg = "white",
+       width = 8, height = 8, units = "in", dpi = 360)
 ################################################################################
 ################################################################################
 ################################################################################
