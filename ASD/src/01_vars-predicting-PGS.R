@@ -21,6 +21,22 @@ setwd(project.dir)
 # demo #
 abcd.demo <- read_csv("../../../data/ABCD/abcd5/age-sex-by-eventname.csv") %>%
   filter(grepl("baseline", eventname))
+abcd.dx.comp <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
+                                "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/abcd-general/abcd_p_screen.csv")) %>%
+  select(IID = src_subject_id, 
+         common_dx = scrn_commondx,
+         psych_dx_other = scrn_psychdx_other,
+         ID = scrn_intdisab,
+         scz_dx = scrn_schiz,
+         ASD_dx = scrn_asd,
+         neur_other = scrn_medcond_other) %>%
+  mutate(any_psych = ifelse(common_dx == 1 |
+                              psych_dx_other == 1 |
+                              ID == 1 |
+                              scz_dx == 1 |
+                              ASD_dx == 1 |
+                              neur_other == 1,
+                            1, 0))
 abcd.dx <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
                            "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/abcd-general/abcd_p_screen.csv")) %>%
   select(IID = src_subject_id, ASD_dx = scrn_asd)
@@ -55,7 +71,7 @@ abcd.cogm <- abcd.cog %>%
 abcd.cog2 <- abcd.cogm %>%
   select(IID, eventname, colnames(rpoe.cog)[-1]) %>%
   drop_na()
-rm(abcd.cog)
+# rm(abcd.cog)
 
 #######
 # MRI #
@@ -101,7 +117,7 @@ abcd.s.mri3 <- abcd.s.mri2 %>%
                 select(y, interview_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
-rm(rpoe.s.mri);rm(abcd.s.mri);rm(abcd.s.mri2)
+# rm(rpoe.s.mri);rm(abcd.s.mri);rm(abcd.s.mri2)
 
 
 #   diffusion
@@ -176,6 +192,11 @@ abcd.d.mri.fa3 <- abcd.d.mri.fa2 %>%
   select(IID, any_of(fa.keep))
 
 #       MD
+### RSI
+abcd.d.mri.md <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
+                                 "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_rsi_fni_aseg.csv"))
+
+### DTI
 abcd.d.mri.md <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
                                  "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_dti_md_fs_at.csv")) %>% 
   filter(grepl("baseline", eventname)) %>%
@@ -241,8 +262,8 @@ abcd.d.mri.md3 <- abcd.d.mri.md2 %>%
             .funs = function(x) paste0("md__", x)) %>%
   select(IID, any_of(md.keep))
 
-rm(abcd.d.mri.fa);rm(abcd.d.mri.fa2);rm(abcd.d.mri.md);rm(abcd.d.mri.md2);rm(rpoe.d.mri)
-rm(rpoe.d.mri.fa2);rm(rpoe.d.mri.md2);rm(rpoe.d.mri.fa);rm(rpoe.d.mri.md)
+# rm(abcd.d.mri.fa);rm(abcd.d.mri.fa2);rm(abcd.d.mri.md);rm(abcd.d.mri.md2);rm(rpoe.d.mri)
+# rm(rpoe.d.mri.fa2);rm(rpoe.d.mri.md2);rm(rpoe.d.mri.fa);rm(rpoe.d.mri.md)
 
 
 #   fMRI
@@ -270,7 +291,7 @@ rpoe.f.mri.falff2 <- rpoe.f.mri.falff %>%
     z_from_lm(y = df$y, x = df[,-1])
   }) %>% select(-c(MRI_age, sex)) %>%
   rename_at(.vars = vars(-c(te_id)), .funs = function(x) paste0("fALFF__", x))
-rm(rpoe.f.mri.falff)
+# rm(rpoe.f.mri.falff)
 
 
 #     rest ReHo
@@ -286,7 +307,7 @@ rpoe.f.mri.reho2 <- rpoe.f.mri.reho %>%
     z_from_lm(y = df$y, x = df[,-1])
   }) %>% select(-c(MRI_age, sex)) %>%
   rename_at(.vars = vars(-c(te_id)), .funs = function(x) paste0("ReHo__", x))
-rm(rpoe.f.mri.reho)
+# rm(rpoe.f.mri.reho)
 
 
 
@@ -312,7 +333,7 @@ abcd.mh3 <- abcd.mh2 %>%
               z_from_lm(y = df$y, x = df[,-1])
             })
 
-rpoe.mh <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
+rpoe.mh.1 <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
                            "/jmichaelson-wdata/msmuhammad/projects/RPOE/behavior/data/derivatives/all-behavior-data-age-sex-corrected.csv"))  %>%
   select(devGenes_id,
          syn_anxdep_r = syn_anxious,
@@ -326,12 +347,14 @@ rpoe.mh <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
          dsm5_depress_r = dsm5_depressive,
          dsm5_anxdisord_r = dsm5_anxiety,
          dsm5_somaticpr_r = dsm5_somatic, 
-         dsm5_adhd_r = dsm5_ADHD)
+         dsm5_adhd_r = dsm5_ADHD,
+         critical)
+rpoe.mh <- rpoe.mh.1 %>% select(-critical)
 abcd.mh4 <- abcd.mh3 %>% 
   filter(grepl("baseline", eventname)) %>%
   select(IID, any_of(colnames(rpoe.mh)))
 
-rm(abcd.mh);rm(abcd.mh2)
+# rm(abcd.mh);rm(abcd.mh2)
 
 #######
 # PGS #
@@ -372,7 +395,7 @@ rpoe.all <- inner_join(rpoe.cog,
                        rpoe.d.mri.fa3) %>%
   inner_join(rpoe.d.mri.md3) %>%
   inner_join(rpoe.s.mri2) %>%
-  inner_join(rpoe.mh %>% inner_join(rpoe.demo %>% select(te_id, devGenes_id))) %>%
+  inner_join(rpoe.mh.1 %>% inner_join(rpoe.demo %>% select(te_id, devGenes_id))) %>%
   inner_join(rpoe.demo %>% select(te_id, ASD_dx)) %>%
   select(-c(devGenes_id, sex, MRI_age)) %>%
   rename(IID = te_id, ASD = ASD_dx)
@@ -739,8 +762,6 @@ t4 %>%
   theme(axis.text.x.bottom =  element_text(angle = 45, hjust = 1))
 ggsave("figs/predicted-ASD_RPOE_DTI-2e.png", bg = "white",
        width = 5, height = 8, units = "in", dpi = 360)
-# SEM
-library(lavaan)
 
 
 ################################################################################
@@ -928,6 +949,14 @@ abcd.d.mri.fa3 %>%
 ################################################################################
 ################################################################################
 ################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
 # correlate FA_CC with critical score
 abcd.mh3 %>%
   select(IID, starts_with("critical")) %>%
@@ -937,15 +966,15 @@ abcd.mh3 %>%
                select(IID, MD_CC = md__Commissure_CorpusCallosum)) %>%
   pivot_longer(cols = starts_with("critical"), names_to = "critical_type", values_to = "critical_score") %>%
   group_by(critical_type) %>% mutate(critical_category = case_when(critical_score > median(critical_score) ~ "High",
-                                                                   critical_score == median(critical_score) ~ "Median",
-                                                                   critical_score < median(critical_score) ~ "Low"),
+                                                                   # critical_score == median(critical_score) ~ "Median",
+                                                                   critical_score <= median(critical_score) ~ "Low"),
                                      critical_category = factor(critical_category, levels = c("High", "Median", "Low"))) %>% ungroup() %>%
   pivot_longer(cols = c(FA_CC, MD_CC), names_to = "DTI_metric", values_to = "DTI_score") %>%
   filter(abs(DTI_score) <=5) %>%
   ggplot(aes(x=critical_category, y = DTI_score, fill = critical_category)) +
   geom_violin(show.legend = F) +
   geom_boxplot(fill = "white", width = 0.2) +
-  ggpubr::stat_compare_means(comparisons = combn(x = c("High", "Median", "Low"), 2, simplify = F)) +
+  ggpubr::stat_compare_means(comparisons = combn(x = c("High", "Low"), 2, simplify = F)) +
   scale_fill_manual(values = six.colors) +
   ggh4x::facet_grid2(rows = vars(DTI_metric), 
                      cols = vars(critical_type), 
@@ -955,6 +984,167 @@ abcd.mh3 %>%
   theme(strip.text.y.right = element_text(angle = 0))
 ggsave("figs/DTI-critical.png", bg = "white",
        width = 8, height = 8, units = "in", dpi = 360)
+
+
+
+
+
+# make an SEM to predict the critical score in ABCD
+# use age, sex, DTI, dx
+# SEM
+library(lavaan);library(semPlot)
+sem.data <- inner_join(abcd.d.mri.fa %>% rename_at(.vars = c(2:18),
+                                                   .funs = function(x) paste0("dti_fa__",x)), 
+                       abcd.demo) %>%
+  inner_join(abcd.d.mri.md %>% rename_at(.vars = c(2:18),
+                                        .funs = function(x) paste0("dti_md__",x))) %>%
+  inner_join(abcd.dx.comp) %>%
+  inner_join(abcd.mh2) %>%
+  inner_join(abcd.cog) %>%
+  drop_na() %>%
+  mutate(critical_3 = ifelse(critical_2_r > 0, 1, 0))
+
+sem.model.1 <- '
+  # Latent variable for cognition
+  # cognition =~ nihtbx_picvocab_agecorrected + nihtbx_flanker_agecorrected + nihtbx_list_agecorrected + nihtbx_pattern_agecorrected + nihtbx_reading_agecorrected + nihtbx_cryst_agecorrected + nihtbx_cardsort_agecorrected + nihtbx_picture_agecorrected + nihtbx_fluidcomp_agecorrected + nihtbx_totalcomp_agecorrected
+  
+  # Latent variable for Behavior
+  Behavior =~ dsm5_depress_r + dsm5_somaticpr_r + dsm5_opposit_r + dsm5_anxdisord_r + dsm5_adhd_r + dsm5_conduct_r
+
+  # Latent variable for DTI
+  # DTI_FA =~ dti_fa__ProjectionBasalGanglia_ThalamicRadiationL + dti_fa__ProjectionBasalGanglia_ThalamicRadiationR + dti_fa__ProjectionBrainstem_CorticospinalTractL + dti_fa__ProjectionBrainstem_CorticospinalTractR + dti_fa__ProjectionBasalGanglia_FornixL + dti_fa__ProjectionBasalGanglia_FornixR + dti_fa__ProjectionBasalGanglia_CorticostriatalTractL + dti_fa__ProjectionBasalGanglia_CorticostriatalTractR + dti_fa__Commissure_CorpusCallosum + dti_fa__Association_InferiorFrontoOccipitalFasciculusL + dti_fa__Association_InferiorFrontoOccipitalFasciculusR + dti_fa__Association_InferiorLongitudinalFasciculusL + dti_fa__Association_InferiorLongitudinalFasciculusR + dti_fa__Association_SuperiorLongitudinalFasciculusL + dti_fa__Association_SuperiorLongitudinalFasciculusR + dti_fa__Association_UncinateFasciculusL + dti_fa__Association_UncinateFasciculusR
+  # DTI_MD =~ dti_md__ProjectionBasalGanglia_ThalamicRadiationL + dti_md__ProjectionBasalGanglia_ThalamicRadiationR + dti_md__ProjectionBrainstem_CorticospinalTractL + dti_md__ProjectionBrainstem_CorticospinalTractR + dti_md__ProjectionBasalGanglia_FornixL + dti_md__ProjectionBasalGanglia_FornixR + dti_md__ProjectionBasalGanglia_CorticostriatalTractL + dti_md__ProjectionBasalGanglia_CorticostriatalTractR + dti_md__Commissure_CorpusCallosum + dti_md__Association_InferiorFrontoOccipitalFasciculusL + dti_md__Association_InferiorFrontoOccipitalFasciculusR + dti_md__Association_InferiorLongitudinalFasciculusL + dti_md__Association_InferiorLongitudinalFasciculusR + dti_md__Association_SuperiorLongitudinalFasciculusL + dti_md__Association_SuperiorLongitudinalFasciculusR + dti_md__Association_UncinateFasciculusL + dti_md__Association_UncinateFasciculusR
+  # DTI =~ DTI_FA + DTI_MD
+  DTI =~ dti_fa__Commissure_CorpusCallosum + dti_md__Commissure_CorpusCallosum
+  
+  # Regressions: predicting Critical Behaviors
+  critical ~ DTI + Behavior + interview_age + sex + any_psych
+  
+  # Optional: Correlations between predictors
+  # cognition ~~ DTI_FA + DTI_MD + Behavior + interview_age + sex + any_psych
+  # cognition ~~ interview_age
+  # cognition ~~ sex
+  # cognition ~~ DTI_FA + DTI_MD
+  # cognition ~~ Behavior
+  # cognition ~~ any_psych
+  # 
+  Behavior ~~ any_psych + interview_age + sex
+  # Behavior ~~ interview_age
+  # Behavior ~~ sex
+  # Behavior ~~ any_psych
+  # Behavior ~~ DTI_FA + DTI_MD
+  # 
+  # DTI ~~ cognition + any_psych + Behavior + interview_age + sex
+  # DTI ~~ any_psych
+  # DTI ~~ interview_age
+  # DTI ~~ sex
+'
+sem.model.2 <- '
+  # Latent variable for cognition
+  cognition =~ nihtbx_picvocab_agecorrected + nihtbx_flanker_agecorrected + nihtbx_list_agecorrected + nihtbx_pattern_agecorrected + 
+               nihtbx_reading_agecorrected + nihtbx_cryst_agecorrected + nihtbx_cardsort_agecorrected + nihtbx_picture_agecorrected + 
+               nihtbx_fluidcomp_agecorrected + nihtbx_totalcomp_agecorrected
+
+  # Latent variable for Behavior
+  Behavior =~ dsm5_depress_r + dsm5_somaticpr_r + dsm5_opposit_r + dsm5_anxdisord_r + dsm5_adhd_r + dsm5_conduct_r
+  
+
+  # Latent variable for DTI (consider using FA and MD as sub-latents or a composite score)
+  DTI_FA =~ dti_fa__ProjectionBasalGanglia_ThalamicRadiationL + dti_fa__ProjectionBasalGanglia_ThalamicRadiationR + dti_fa__ProjectionBrainstem_CorticospinalTractL + dti_fa__ProjectionBrainstem_CorticospinalTractR + dti_fa__ProjectionBasalGanglia_FornixL + dti_fa__ProjectionBasalGanglia_FornixR + dti_fa__ProjectionBasalGanglia_CorticostriatalTractL + dti_fa__ProjectionBasalGanglia_CorticostriatalTractR + dti_fa__Commissure_CorpusCallosum + dti_fa__Association_InferiorFrontoOccipitalFasciculusL + dti_fa__Association_InferiorFrontoOccipitalFasciculusR + dti_fa__Association_InferiorLongitudinalFasciculusL + dti_fa__Association_InferiorLongitudinalFasciculusR + dti_fa__Association_SuperiorLongitudinalFasciculusL + dti_fa__Association_SuperiorLongitudinalFasciculusR + dti_fa__Association_UncinateFasciculusL + dti_fa__Association_UncinateFasciculusR
+  DTI_MD =~ dti_md__ProjectionBasalGanglia_ThalamicRadiationL + dti_md__ProjectionBasalGanglia_ThalamicRadiationR + dti_md__ProjectionBrainstem_CorticospinalTractL + dti_md__ProjectionBrainstem_CorticospinalTractR + dti_md__ProjectionBasalGanglia_FornixL + dti_md__ProjectionBasalGanglia_FornixR + dti_md__ProjectionBasalGanglia_CorticostriatalTractL + dti_md__ProjectionBasalGanglia_CorticostriatalTractR + dti_md__Commissure_CorpusCallosum + dti_md__Association_InferiorFrontoOccipitalFasciculusL + dti_md__Association_InferiorFrontoOccipitalFasciculusR + dti_md__Association_InferiorLongitudinalFasciculusL + dti_md__Association_InferiorLongitudinalFasciculusR + dti_md__Association_SuperiorLongitudinalFasciculusL + dti_md__Association_SuperiorLongitudinalFasciculusR + dti_md__Association_UncinateFasciculusL + dti_md__Association_UncinateFasciculusR
+  DTI =~ DTI_FA + DTI_MD
+
+  # Regression paths: predicting critical behaviors with direct effects
+  critical ~ cognition + DTI + Behavior + interview_age + sex + any_psych
+
+  # Correlations between predictors (optional)
+  cognition ~~ Behavior + DTI + interview_age + sex + any_psych
+  DTI ~~ Behavior + cognition + interview_age + sex + any_psych
+  Behavior ~~ cognition + DTI + interview_age + sex + any_psych
+'
+# Fit the SEM model
+# sem.fit.1 <- sem(sem.model.1, data = sem.data %>%
+#                    select(starts_with(c("dti_fa", "dti_md", "nihtbx", "dsm5")),
+#                           interview_age, sex, any_psych, critical = critical_1_r) %>%
+#                    mutate_at(.vars = vars(-c(any_psych, sex)), .funs = function(x) scale(x,T,T)[,1]))
+sem.fit.2 <- sem(sem.model.2, data = sem.data %>%
+                   select(starts_with(c("dti_fa", "dti_md", "nihtbx", "dsm5")),
+                          interview_age, sex, any_psych, critical = critical_3) %>%
+                   mutate_at(.vars = vars(-c(any_psych, sex, critical)), 
+                             .funs = function(x) scale(x, TRUE, TRUE)[,1]), 
+                 estimator = "DWLS")
+
+
+# View summary with fit indices
+summary(sem.fit.2, fit.measures = TRUE, standardized = TRUE)
+
+sem.parameters.2 <- parameterEstimates(sem.fit.2)
+semPaths(sem.fit.2, what = "std")
+
+
+
+sem.data %>%
+  select(starts_with(c("dti_fa", "dti_md", "nihtbx", "dsm5")),
+         interview_age, sex, any_psych, 
+         critical = critical_2_r) %>%
+  mutate_at(.vars = vars(-c(any_psych, sex, critical)), 
+            .funs = function(x) scale(x, TRUE, TRUE)[,1]) %>%
+  mutate(critical = as.factor(critical)) %>%
+  pivot_longer(cols = starts_with("dsm5")) %>%
+  # filter(abs(value) < 10) %>%
+  ggplot(aes(x=critical, y = value, fill = critical)) +
+  geom_violin() +
+  geom_boxplot(width = 0.2, fill = "white") +
+  geom_hline(yintercept = 0, linetype=2, color = "pink") +
+  ggpubr::stat_compare_means(comparisons = combn(c("0","1","2","3"), 
+                                                 m = 2, 
+                                                 simplify = F)) +
+  scale_fill_manual(values = six.colors) +
+  facet_wrap(~name, scales = "free") +
+  bw.theme
+
+sem.data %>%
+  # mutate(critical_1_r = residuals(glm(critical_1_r ~ interview_age, 
+  #                                     data = sem.data, family = poisson()))) %>%
+  ggplot(aes(x=critical_1_r, y = nihtbx_pattern_agecorrected)) +
+  geom_point(shape = 1) +
+  geom_smooth(method = "lm", color = six.colors[3]) +
+  ggpubr::stat_cor() +
+  bw.theme
+
+p1 <- sem.data %>%
+  mutate(nihtbx_pattern_agecorrected = scale(nihtbx_pattern_agecorrected, T,T)[,1]) %>%
+  pivot_longer(cols = c(critical_1_r, critical_2_r)) %>%
+  mutate(value_2 = ifelse(value == 0, "0", ">=1"),
+         value_2 = factor(value_2, levels = c("0", ">=1")),
+         name = ifelse(name == "critical_1_r", "ALL_critical_questions", "Suicidal_questions")) %>%
+  ggplot(aes(x=value_2, y = nihtbx_pattern_agecorrected, fill = value_2)) +
+  geom_violin(show.legend = F) +
+  geom_boxplot(width = 0.2, fill = "white") +
+  ggpubr::stat_compare_means(label.y.npc =  0.8, 
+                             comparisons = combn(x = c("0", ">=1"),
+                                                 m = 2, simplify = F), 
+                             vjust = 0.1, size = 3) +
+  bw.theme +
+  facet_wrap(~name) +
+  scale_fill_manual(values = six.colors[c(2,1)]) +
+  labs(x="problems_score")
+
+p2 <- sem.data %>%
+  mutate(nihtbx_pattern_agecorrected = scale(nihtbx_pattern_agecorrected, T,T)[,1]) %>%
+  pivot_longer(cols = c(critical_1_r, critical_2_r)) %>%
+  mutate(name = ifelse(name == "critical_1_r", "ALL_critical_questions", "Suicidal_questions")) %>%
+  ggplot(aes(x=value)) +
+  geom_bar() +
+  geom_text(stat = "count", 
+            aes(label = ..count..), 
+            vjust = 0.5, size = 3) +  
+  bw.theme +
+  facet_wrap(~name, scales = "free")
+
+patchwork::wrap_plots(p2,p1, ncol = 1, heights = c(1,3))
+ggsave("figs/citical-vs-PS.png", bg = "white",
+       width = 8, height = 9, units = "in", dpi = 360)
 ################################################################################
 ################################################################################
 ################################################################################
