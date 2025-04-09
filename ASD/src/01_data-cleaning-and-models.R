@@ -1,129 +1,103 @@
 ################################################################################
 #                       variables predicting ASD status/PGS                    #
 ################################################################################
-rm(list = ls())
-gc()
+rm(list = ls()); gc()
 device <- ifelse(grepl("/LSS/", system("cd &pwd", intern = T)), "IDAS", "argon")
 source(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-              "/jmichaelson-wdata/msmuhammad/msmuhammad-source.R"))
+              "/jmichaelson-wdata/msmuhammad/workbench/customized-functions/correct_path.R"))
+source(correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/msmuhammad-source.R"))
 ################################################################################
 ################################################################################
-project.dir <- paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                      "/jmichaelson-wdata/msmuhammad/projects/ABCD/ASD")
+project.dir <- correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/projects/ABCD/ASD")
 setwd(project.dir)
 ################################################################################
 ################################################################################
 ################################################################################
 # load data and reformat per category for both ABCD and RPOE
-# 
 
 ########
 # demo #
+########
 abcd.demo <- read_csv("../../../data/ABCD/abcd5/age-sex-by-eventname.csv") %>%
   filter(grepl("baseline", eventname))
-abcd.dx.comp <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                                "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/abcd-general/abcd_p_screen.csv")) %>%
-  select(IID = src_subject_id, 
-         common_dx = scrn_commondx,
-         psych_dx_other = scrn_psychdx_other,
-         ID = scrn_intdisab,
-         scz_dx = scrn_schiz,
-         ASD_dx = scrn_asd,
-         neur_other = scrn_medcond_other) %>%
-  mutate(any_psych = ifelse(common_dx == 1 |
-                              psych_dx_other == 1 |
-                              ID == 1 |
-                              scz_dx == 1 |
-                              ASD_dx == 1 |
-                              neur_other == 1,
-                            1, 0))
-abcd.dx <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                           "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/abcd-general/abcd_p_screen.csv")) %>%
-  select(IID = src_subject_id, ASD_dx = scrn_asd)
+abcd.dx.comp <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/abcd-general/abcd_p_screen.csv")) %>%
+  select(IID = src_subject_id, common_dx = scrn_commondx, psych_dx_other = scrn_psychdx_other,ID = scrn_intdisab,
+         scz_dx = scrn_schiz, ASD_dx = scrn_asd, neur_other = scrn_medcond_other) %>%
+  mutate(any_psych = ifelse(common_dx == 1 |psych_dx_other == 1 |ID == 1 |scz_dx == 1 |ASD_dx == 1 |neur_other == 1,1, 0))
+abcd.demo <- inner_join(abcd.demo, abcd.dx.comp);rm(abcd.dx.comp)
 rpoe.demo <- read_csv("../../RPOE/shared_data/data/demo-full.csv")
 
 #######
 # cog #
-abcd.cog <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                            "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/neurocognition/nc_y_nihtb.csv")) %>%
-  filter(grepl("baseline", eventname)) %>%
-  select(IID = src_subject_id, eventname, ends_with("agecorrected")) %>%
+#######
+abcd.cog.raw <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/neurocognition/nc_y_nihtb.csv")) %>%
+  filter(grepl("baseline", eventname)) %>% select(IID = src_subject_id, eventname, ends_with("agecorrected")) %>%
   inner_join(abcd.demo)
 
 rpoe.cog.raw <- read_rds("../../RPOE/shared_data/data/m1m2-sex-corrected.rds")
-rpoe.cog <- read_rds("../../RPOE/shared_data/data/m1m2-sex-corrected.rds") %>%
-  select(te_id,
-         nihtbx_picvocab_agecorrected = picture_vocabulary_age_corrected_standard_score,
+## renaming columns to match naming from ABCD
+rpoe.cog <- rpoe.cog.raw %>%
+  rename(nihtbx_picvocab_agecorrected = picture_vocabulary_age_corrected_standard_score,
          nihtbx_flanker_agecorrected = flanker_inhibitory_control_age_corrected_standard_score,
          nihtbx_list_agecorrected = list_sorting_wm_age_corrected_standard_score,
          nihtbx_cardsort_agecorrected = dimensional_change_card_sort_age_corrected_standard_score,
          nihtbx_pattern_agecorrected = pattern_comparison_PS_age_corrected_standard_score,
          nihtbx_picture_agecorrected = picture_sequence_memory_test_age_corrected_standard_score,
          nihtbx_reading_agecorrected = oral_reading_recognition_age_corrected_standard_score)
-abcd.cogm <- abcd.cog %>%
-  mutate_at(.vars = colnames(abcd.cog)[-c(1,2,13,14)],
+
+## correct ABCD cog measures for sex
+abcd.cog <- abcd.cog.raw %>%
+  mutate_at(.vars = colnames(abcd.cog.raw)[-c(1,2,13,14)],
             .funs = function(x){
-              df <- abcd.cog %>% 
-                mutate(y = x) %>%
-                select(y, sex)
+              df <- abcd.cog.raw %>% mutate(y = x) %>%select(y, sex)
               z_from_lm(y = df$y, x = df[,-1])
-            })
-abcd.cog2 <- abcd.cogm %>%
-  select(IID, eventname, colnames(rpoe.cog)[-1]) %>%
+            }) %>%
+  select(IID, eventname, colnames(rpoe.cog)[grepl("nihtbx", colnames(rpoe.cog))]) %>%
   drop_na()
-# rm(abcd.cog)
+# rm(abcd.cog.raw);gc()
 
 #######
 # MRI #
+#######
 
-#   structural
-abcd.s.mri <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                              "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_smr_vol_aseg.csv")) %>% 
+
+#######  structural
+# for ABCD, get the total volume
+abcd.s.mri.raw <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_smr_vol_aseg.csv")) %>% 
   filter(grepl("baseline", eventname)) %>%
-  rowwise() %>%
-  mutate(total_volume = sum(c_across(-c(1, 2)), na.rm = TRUE)) %>%
-  ungroup()
-rpoe.s.mri <- read_rds(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                              "/jmichaelson-wdata/msmuhammad/projects/RPOE/mri/data",
+  rowwise() %>% mutate(total_volume = sum(c_across(-c(1, 2)), na.rm = TRUE)) %>% ungroup()
+rpoe.s.mri.raw <- read_rds(paste0(correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/projects/RPOE/mri/data"),
                               "/derivatives/brain-vols-synthreg-age-sex-tot-vol-corrected.rds"))
-colnames(rpoe.s.mri) <- c("te_id",
-                          "smri_vol_scs_cbwmatterlh", colnames(rpoe.s.mri)[3],
-                          "smri_vol_scs_ltventriclelh","smri_vol_scs_inflatventlh","smri_vol_scs_crbwmatterlh",
-                          "smri_vol_scs_crbcortexlh","smri_vol_scs_tplh","smri_vol_scs_caudatelh",    
-                          "smri_vol_scs_putamenlh","smri_vol_scs_pallidumlh","smri_vol_scs_3rdventricle", 
-                          "smri_vol_scs_4thventricle","smri_vol_scs_bstem","smri_vol_scs_hpuslh",   
-                          "smri_vol_scs_amygdalalh","smri_vol_scs_csf",
+## renaming columns to match naming from ABCD
+colnames(rpoe.s.mri.raw) <- c("te_id", "smri_vol_scs_cbwmatterlh", colnames(rpoe.s.mri.raw)[3], "smri_vol_scs_ltventriclelh","smri_vol_scs_inflatventlh","smri_vol_scs_crbwmatterlh",
+                          "smri_vol_scs_crbcortexlh","smri_vol_scs_tplh","smri_vol_scs_caudatelh", "smri_vol_scs_putamenlh","smri_vol_scs_pallidumlh","smri_vol_scs_3rdventricle", 
+                          "smri_vol_scs_4thventricle","smri_vol_scs_bstem","smri_vol_scs_hpuslh", "smri_vol_scs_amygdalalh","smri_vol_scs_csf",
                           "smri_vol_scs_aal","smri_vol_scs_vedclh",
-                          
-                          "smri_vol_scs_cbwmatterrh", colnames(rpoe.s.mri)[21],
-                          "smri_vol_scs_ltventriclerh","smri_vol_scs_inflatventrh","smri_vol_scs_crbwmatterrh",
-                          "smri_vol_scs_crbcortexrh","smri_vol_scs_tprh","smri_vol_scs_caudaterh",    
-                          "smri_vol_scs_putamenrh","smri_vol_scs_pallidumrh","smri_vol_scs_hpusrh",
-                          "smri_vol_scs_amygdalarh","smri_vol_scs_aar",
-                          "smri_vol_scs_vedcrh",
-                          
-                          colnames(rpoe.s.mri)[c(34:40)])
-rpoe.s.mri2 <- rpoe.s.mri %>% select(te_id, any_of(colnames(abcd.s.mri)))
-abcd.s.mri2 <- abcd.s.mri %>%
-  mutate_at(.vars = -c(1,2, ncol(.data)), 
-            .funs = function(x) x/abcd.s.mri$total_volume) %>%
-  select(IID = src_subject_id, any_of(colnames(rpoe.s.mri2))) %>%
-  inner_join(abcd.demo)
-abcd.s.mri3 <- abcd.s.mri2 %>%
+                          "smri_vol_scs_cbwmatterrh", colnames(rpoe.s.mri.raw)[21], "smri_vol_scs_ltventriclerh","smri_vol_scs_inflatventrh","smri_vol_scs_crbwmatterrh",
+                          "smri_vol_scs_crbcortexrh","smri_vol_scs_tprh","smri_vol_scs_caudaterh", "smri_vol_scs_putamenrh","smri_vol_scs_pallidumrh","smri_vol_scs_hpusrh",
+                          "smri_vol_scs_amygdalarh","smri_vol_scs_aar","smri_vol_scs_vedcrh",
+                          colnames(rpoe.s.mri.raw)[c(34:40)])
+rpoe.s.mri <- rpoe.s.mri.raw %>% select(te_id, any_of(colnames(abcd.s.mri.raw)))
+
+## divide the volume in ABCD by total brain volume
+abcd.s.mri2 <- abcd.s.mri.raw %>%
+  mutate_at(.vars = -c(1,2, ncol(.data)), .funs = function(x) x/abcd.s.mri.raw$total_volume) %>%
+  select(IID = src_subject_id, any_of(colnames(rpoe.s.mri))) %>% inner_join(abcd.demo)
+## correct ratios for age and sex
+abcd.s.mri <- abcd.s.mri2 %>%
   mutate_at(.vars = vars(starts_with("smri")),
             .funs = function(x){
-              df <- abcd.s.mri2 %>% 
-                mutate(y = x) %>%
-                select(y, interview_age, sex)
+              df <- abcd.s.mri2 %>% mutate(y = x) %>% select(y, interview_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
+rm(abcd.s.mri2)
 # rm(rpoe.s.mri);rm(abcd.s.mri);rm(abcd.s.mri2)
 
 
-#   diffusion
-#       FA
-abcd.d.mri.fa <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                                 "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_dti_fa_fs_at.csv")) %>% 
+#######  diffusion
+#######    FA
+# renamed columns to match naming from RPOE
+abcd.d.mri.fa.raw <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_dti_fa_fs_at.csv")) %>% 
   filter(grepl("baseline", eventname)) %>%
   rename(ProjectionBasalGanglia_ThalamicRadiationL = dmdtifp1_10,
          ProjectionBasalGanglia_ThalamicRadiationR = dmdtifp1_9,
@@ -144,61 +118,48 @@ abcd.d.mri.fa <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated")
          Association_UncinateFasciculusR = dmdtifp1_11) %>%
   select(IID = src_subject_id, starts_with(c("Projection", "Comm", "Asso"))) %>%
   inner_join(abcd.demo)
-abcd.d.mri.fa2 <- abcd.d.mri.fa %>%
+# correct for age and sex
+abcd.d.mri.fa2 <- abcd.d.mri.fa.raw %>%
   mutate_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))),
             .funs = function(x){
-              df <- abcd.d.mri.fa %>% 
-                mutate(y = x) %>%
-                select(y, interview_age, sex)
+              df <- abcd.d.mri.fa.raw %>% mutate(y = x) %>% select(y, interview_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
-
-rpoe.d.mri <- read_rds(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                              "/jmichaelson-wdata/msmuhammad/projects/RPOE/dwi/data",
+# get RPOE diffusion data, keep regions in ABCD
+rpoe.d.mri.raw <- read_rds(paste0(correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/projects/RPOE/dwi/data"),
                               "/derivatives/recognized-tracts-summary-stats-DSI_RAW.rds"))
-rpoe.d.mri.fa <- rpoe.d.mri %>%
-  filter(roi %in% colnames(abcd.d.mri.fa2),
-         feature %in% c("dti_fa")) %>%
+rpoe.d.mri.fa.raw <- rpoe.d.mri.raw %>%
+  filter(roi %in% colnames(abcd.d.mri.fa2),feature %in% c("dti_fa")) %>%
   mutate(new_name = paste0(feature, "__", roi)) %>%
   pivot_wider(names_from = new_name, values_from = value, id_cols = c("te_id")) %>%
-  select(te_id, any_of(paste0(c("dti_fa__"), colnames(abcd.d.mri.fa2)))) %>%
-  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) %>%
-  drop_na(MRI_age) 
-fa.keep <- names(colSums(rpoe.d.mri.fa %>% select(starts_with("dti")))[!is.na(colSums(rpoe.d.mri.fa %>% select(starts_with("dti"))))])
-rpoe.d.mri.fa2 <- rpoe.d.mri.fa %>%
-  select(te_id, MRI_age, sex, fa.keep)
-
+  # select(te_id, any_of(paste0(c("dti_fa__"), colnames(abcd.d.mri.fa2)))) %>%
+  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) %>% drop_na(MRI_age) 
+fa.keep <- names(colSums(rpoe.d.mri.fa.raw %>% select(starts_with("dti")))[!is.na(colSums(rpoe.d.mri.fa.raw %>% select(starts_with("dti"))))])
+rpoe.d.mri.fa2 <- rpoe.d.mri.fa.raw %>% select(te_id, MRI_age, sex, fa.keep)
+# checking if diffusion metrics are correlated with age
 rpoe.d.mri.fa2 %>%
   ggplot(aes(x = dti_fa__Commissure_CorpusCallosum, y = MRI_age)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm") +
-  ggpubr::stat_cor(method = "spearman") +
-  bw.theme
-
-rpoe.d.mri.fa3 <- rpoe.d.mri.fa2 %>%
+  geom_point(shape = 1) + geom_smooth(method = "lm") +
+  ggpubr::stat_cor(method = "spearman") + bw.theme
+# correct RPOE diffusion for age and sex
+rpoe.d.mri.fa <- rpoe.d.mri.fa2 %>%
   mutate_at(.vars = fa.keep,
             .funs = function(x) {
-              df <- rpoe.d.mri.fa2 %>%
-                mutate(y = x) %>%
-                select(y, MRI_age, sex)
+              df <- rpoe.d.mri.fa2 %>% mutate(y = x) %>% select(y, MRI_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
-
-
-abcd.d.mri.fa3 <- abcd.d.mri.fa2 %>% 
+rm(rpoe.d.mri.fa2)
+# keep regions in RPOE
+abcd.d.mri.fa <- abcd.d.mri.fa2 %>% 
   filter(grepl("baseline", eventname)) %>%
-  rename_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))), 
-            .funs = function(x) paste0("dti_fa__", x)) %>%
+  rename_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))),  .funs = function(x) paste0("dti_fa__", x)) %>%
   select(IID, any_of(fa.keep))
+rm(abcd.d.mri.fa2);rm(fa.keep);gc()
 
-#       MD
-### RSI
-abcd.d.mri.md <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                                 "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_rsi_fni_aseg.csv"))
-
+#######    MD
 ### DTI
-abcd.d.mri.md <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                                 "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_dti_md_fs_at.csv")) %>% 
+# read, rename regions to match RPOE naming
+abcd.d.mri.md.raw <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/imaging/mri_y_dti_md_fs_at.csv")) %>% 
   filter(grepl("baseline", eventname)) %>%
   rename(ProjectionBasalGanglia_ThalamicRadiationL = dmdtifp1_52,
          ProjectionBasalGanglia_ThalamicRadiationR = dmdtifp1_51,
@@ -219,153 +180,90 @@ abcd.d.mri.md <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated")
          Association_UncinateFasciculusR = dmdtifp1_53) %>%
   select(IID = src_subject_id, starts_with(c("Projection", "Comm", "Asso"))) %>%
   inner_join(abcd.demo)
-abcd.d.mri.md2 <- abcd.d.mri.md %>%
+# correct for age and sex
+abcd.d.mri.md2 <- abcd.d.mri.md.raw %>%
   mutate_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))),
             .funs = function(x){
-              df <- abcd.d.mri.md %>% 
-                mutate(y = x) %>%
-                select(y, interview_age, sex)
+              df <- abcd.d.mri.md.raw %>% mutate(y = x) %>% select(y, interview_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
-
-rpoe.d.mri.md <- rpoe.d.mri %>%
-  filter(roi %in% colnames(abcd.d.mri.md2),
-         feature %in% c("md")) %>%
+# filter RPOE diffusion data to match ABCD
+rpoe.d.mri.md.raw <- rpoe.d.mri.raw %>%
+  filter(roi %in% colnames(abcd.d.mri.md2), feature %in% c("md")) %>%
   mutate(new_name = paste0(feature, "__", roi)) %>%
   pivot_wider(names_from = new_name, values_from = value, id_cols = c("te_id")) %>%
   select(te_id, any_of(paste0(c("md__"), colnames(abcd.d.mri.md2)))) %>%
-  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) %>%
-  drop_na(MRI_age) 
-md.keep <- names(colSums(rpoe.d.mri.md %>% select(starts_with("md")))[!is.na(colSums(rpoe.d.mri.md %>% select(starts_with("md"))))])
-rpoe.d.mri.md2 <- rpoe.d.mri.md %>%
-  select(te_id, MRI_age, sex, md.keep)
-
+  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) %>% drop_na(MRI_age) 
+md.keep <- names(colSums(rpoe.d.mri.md.raw %>% select(starts_with("md")))[!is.na(colSums(rpoe.d.mri.md.raw %>% select(starts_with("md"))))])
+rpoe.d.mri.md2 <- rpoe.d.mri.md.raw %>% select(te_id, MRI_age, sex, md.keep)
+# check if age has an effect
 rpoe.d.mri.md2 %>%
   ggplot(aes(x = md__Commissure_CorpusCallosum, y = MRI_age)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm") +
-  ggpubr::stat_cor(method = "spearman") +
-  bw.theme
-
-rpoe.d.mri.md3 <- rpoe.d.mri.md2 %>%
+  geom_point(shape = 1) + geom_smooth(method = "lm") +
+  ggpubr::stat_cor(method = "spearman") + bw.theme
+# correct for age and sex
+rpoe.d.mri.md <- rpoe.d.mri.md2 %>%
   mutate_at(.vars = md.keep,
             .funs = function(x) {
-              df <- rpoe.d.mri.md2 %>%
-                mutate(y = x) %>%
-                select(y, MRI_age, sex)
+              df <- rpoe.d.mri.md2 %>% mutate(y = x) %>% select(y, MRI_age, sex)
               z_from_lm(y = df$y, x = df[,-1])
             })
-
-abcd.d.mri.md3 <- abcd.d.mri.md2 %>% 
+rm(rpoe.d.mri.md2)
+# rename, filter ABCD to match
+abcd.d.mri.md <- abcd.d.mri.md2 %>% 
   filter(grepl("baseline", eventname)) %>%
-  rename_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))), 
-            .funs = function(x) paste0("md__", x)) %>%
+  rename_at(.vars = vars(starts_with(c("Projection", "Comm", "Asso"))), .funs = function(x) paste0("md__", x)) %>%
   select(IID, any_of(md.keep))
-
+rm(abcd.d.mri.md2);rm(md.keep);gc()
 # rm(abcd.d.mri.fa);rm(abcd.d.mri.fa2);rm(abcd.d.mri.md);rm(abcd.d.mri.md2);rm(rpoe.d.mri)
 # rm(rpoe.d.mri.fa2);rm(rpoe.d.mri.md2);rm(rpoe.d.mri.fa);rm(rpoe.d.mri.md)
 
 
-#   fMRI
-#     fALFF
-roi.meta <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                            "/jmichaelson-wdata/msmuhammad/refs/Schaefer2018/Parcellations/MNI/Centroid_coordinates/Schaefer2018_100Parcels_7Networks_order_FSLMNI152_2mm.Centroid_RAS.csv")) %>%
-  mutate(full_network = sub("7Networks_.H_", "", `ROI Name`),
-         network = sub("_.*", "", full_network),
-         hemisphere = ifelse(grepl("_LH_", `ROI Name`), "LH", "RH"),
-         h_network = paste0(hemisphere, "_", network),
-         roi_name=sub("7Networks_", "", `ROI Name`),
-         net9 = sub("[ABC]$", "", network),
-         h_net9 = paste0(hemisphere, "_", net9))
-rpoe.f.mri.falff <- read_rds("../../RPOE/mri/data/derivatives/R-func/REST-roi-fALFF-del5-100-7.rds") %>%
-  pivot_longer(cols = -c(1), names_to = "roi_name") %>%
-  left_join(roi.meta) %>%
-  group_by(te_id, network) %>%
-  dplyr::summarise(value = mean(value, na.rm = T)) %>% ungroup() %>%
-  pivot_wider(names_from = "network", values_from = "value", id_cols = "te_id") %>%
-  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) 
-rpoe.f.mri.falff2 <- rpoe.f.mri.falff %>%
-  mutate_at(.vars = roi.meta$network, .funs = function(x) {
-    df <- rpoe.f.mri.falff %>% mutate(y = x) %>%
-      select(y, MRI_age, sex)
-    z_from_lm(y = df$y, x = df[,-1])
-  }) %>% select(-c(MRI_age, sex)) %>%
-  rename_at(.vars = vars(-c(te_id)), .funs = function(x) paste0("fALFF__", x))
-# rm(rpoe.f.mri.falff)
+#######  fMRI
+#######    fALFF
+rpoe.f.mri.falff <- read_rds("../../RPOE/mri/data/derivatives/R-func/REST-fALFF-summarized-age-sex-corrected.rds")
 
-
-#     rest ReHo
-rpoe.f.mri.reho <- read_rds("../../RPOE/mri/data/derivatives/R-func/participants-REST-roi-raw-ReHo-100-7.rds") %>%
-  group_by(te_id, network) %>%
-  dplyr::summarise(value = mean(ReHo, na.rm = T)) %>% ungroup() %>%
-  pivot_wider(names_from = "network", values_from = "value", id_cols = "te_id") %>%
-  left_join(rpoe.demo %>% select(te_id, MRI_age, sex)) 
-rpoe.f.mri.reho2 <- rpoe.f.mri.reho %>%
-  mutate_at(.vars = roi.meta$network, .funs = function(x) {
-    df <- rpoe.f.mri.reho %>% mutate(y = x) %>%
-      select(y, MRI_age, sex)
-    z_from_lm(y = df$y, x = df[,-1])
-  }) %>% select(-c(MRI_age, sex)) %>%
-  rename_at(.vars = vars(-c(te_id)), .funs = function(x) paste0("ReHo__", x))
-# rm(rpoe.f.mri.reho)
-
-
+#######    rest ReHo
+rpoe.f.mri.reho <- read_rds("../../RPOE/mri/data/derivatives/R-func/REST-ReHo-summarized-age-sex-corrected.rds")
 
 #################
 # mental health #
-abcd.mh <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                           "/jmichaelson-sdata/ABCD/abcd_release_5_0/core/mental-health/mh_p_cbcl.csv")) %>%
-  mutate(critical_1_r = cbcl_q06_p + cbcl_q15_p + cbcl_q18_p + cbcl_q40_p + 
-           cbcl_q57_p + cbcl_q59_p + cbcl_q67_p + cbcl_q70_p + 
-           cbcl_q72_p + cbcl_q91_p + cbcl_q105_p + cbcl_q107_p,
+#################
+abcd.mh.raw <- read_csv(correct_path("/Dedicated/jmichaelson-sdata/ABCD/abcd_release_5_0/core/mental-health/mh_p_cbcl.csv")) %>%
+  mutate(critical_1_r = cbcl_q06_p + cbcl_q15_p + cbcl_q18_p + cbcl_q40_p + cbcl_q57_p + cbcl_q59_p + cbcl_q67_p + cbcl_q70_p + cbcl_q72_p + cbcl_q91_p + cbcl_q105_p + cbcl_q107_p, 
          critical_2_r = cbcl_q18_p + cbcl_q91_p) %>%
   select(IID = src_subject_id,2, contains("syn"), contains("dsm5"), contains("critical"))
-abcd.mh2 <- abcd.mh[,c(T,T,grepl("_r$", colnames(abcd.mh)[-c(1:2)]))] %>%
+abcd.mh2 <- abcd.mh.raw[,c(T,T,grepl("_r$", colnames(abcd.mh.raw)[-c(1:2)]))] %>%
   filter(grepl("baseline", eventname)) %>% drop_na() %>%
-  inner_join(abcd.demo) %>%
-  rename_all(.funs = function(x) sub("cbcl_scr_", "", x))
-abcd.mh3 <- abcd.mh2 %>%
-  mutate_at(.vars = vars(starts_with(c("syn", "dsm5", "critical"))),
-            .funs = function(x){
-              df <- abcd.mh2 %>% 
-                mutate(y = x) %>%
-                select(y, interview_age, sex)
-              z_from_lm(y = df$y, x = df[,-1])
-            })
-
-rpoe.mh.1 <- read_csv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                           "/jmichaelson-wdata/msmuhammad/projects/RPOE/behavior/data/derivatives/all-behavior-data-age-sex-corrected.csv"))  %>%
-  select(devGenes_id,
-         syn_anxdep_r = syn_anxious,
-         syn_withdep_r = syn_withdrawn,
-         syn_somatic_r = syn_somatic, 
-         syn_social_r = syn_social,
-         syn_thought_r = syn_thought,
-         syn_attention_r = syn_attention,
-         syn_rulebreak_r = syn_rulebreaking,
-         syn_aggressive_r = syn_aggressive,
-         dsm5_depress_r = dsm5_depressive,
-         dsm5_anxdisord_r = dsm5_anxiety,
-         dsm5_somaticpr_r = dsm5_somatic, 
-         dsm5_adhd_r = dsm5_ADHD,
-         critical)
-rpoe.mh <- rpoe.mh.1 %>% select(-critical)
-abcd.mh4 <- abcd.mh3 %>% 
+  inner_join(abcd.demo) %>% rename_all(.funs = function(x) sub("cbcl_scr_", "", x))
+abcd.mh3 <- abcd.mh2 %>% mutate_at(.vars = vars(starts_with(c("syn", "dsm5", "critical"))),
+                                   .funs = function(x){
+                                     df <- abcd.mh2 %>% mutate(y = x) %>% select(y, interview_age, sex)
+                                     z_from_lm(y = df$y, x = df[,-1])
+                                   })
+# get RPOE
+rpoe.mh.raw <- read_csv(correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/projects/RPOE/behavior/data/derivatives/all-behavior-data-age-sex-corrected.csv"))  %>%
+  select(devGenes_id, syn_anxdep_r = syn_anxious, syn_withdep_r = syn_withdrawn, syn_somatic_r = syn_somatic, 
+         syn_social_r = syn_social, syn_thought_r = syn_thought, syn_attention_r = syn_attention,
+         syn_rulebreak_r = syn_rulebreaking, syn_aggressive_r = syn_aggressive, dsm5_depress_r = dsm5_depressive,
+         dsm5_anxdisord_r = dsm5_anxiety, dsm5_somaticpr_r = dsm5_somatic, dsm5_adhd_r = dsm5_ADHD, critical)
+rpoe.mh <- rpoe.mh.raw %>% select(-critical)
+abcd.mh <- abcd.mh3 %>% 
   filter(grepl("baseline", eventname)) %>%
   select(IID, any_of(colnames(rpoe.mh)))
+rm(abcd.mh2);rm(abcd.mh3);gc()
 
-# rm(abcd.mh);rm(abcd.mh2)
 
 #######
 # PGS #
-abcd.pgs <- read_tsv(paste0(ifelse(device == "IDAS", "~/LSS", "/Dedicated"),
-                            "/jmichaelson-wdata/trthomas/array/merged_2022_ABCD_iWES1_WGS_2-4/PGS/all_PGS.tsv")) %>%
+#######
+abcd.pgs <- read_tsv(correct_path("/Dedicated/jmichaelson-wdata/msmuhammad/data/TT/merged-pgs.tsv")) %>%
   filter(grepl("autism|cog_performance-SSGAC-2018", PGS_name), IID %in% abcd.demo$IID) %>%
   pivot_wider(names_from = PGS_name, values_from = PGS_std_PCresid, id_cols = "IID") %>%
   select(IID, ASD = `autism-PGC-2019`, CP = `cog_performance-SSGAC-2018`)
 
 abcd.pgs %>%
-  inner_join(abcd.dx) %>%
+  inner_join(abcd.demo) %>%
   mutate(ASD_dx = as.factor(ASD_dx)) %>%
   drop_na() %>%
   ggplot(aes(x=ASD, color = ASD_dx)) +
@@ -381,24 +279,23 @@ abcd.pgs %>%
 ################################################################################
 # combine all data
 
-abcd.all <- inner_join(abcd.cog2,
-                       abcd.d.mri.fa3) %>%
-  inner_join(abcd.d.mri.md3) %>%
-  inner_join(abcd.s.mri3) %>%
-  inner_join(abcd.mh4) %>%
+abcd.all <- inner_join(abcd.cog, abcd.d.mri.fa) %>%
+  inner_join(abcd.d.mri.md) %>%
+  inner_join(abcd.s.mri) %>%
+  inner_join(abcd.mh) %>%
   inner_join(abcd.pgs) %>%
-  inner_join(abcd.dx %>% mutate(ASD_dx = as.factor(ASD_dx))) %>%
+  mutate(ASD_dx = as.factor(ASD_dx)) %>%
   select(-c(interview_age, sex, eventname)) %>%
   drop_na(ASD_dx)
 
-rpoe.all <- inner_join(rpoe.cog,
-                       rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.s.mri2) %>%
-  inner_join(rpoe.mh.1 %>% inner_join(rpoe.demo %>% select(te_id, devGenes_id))) %>%
-  inner_join(rpoe.demo %>% select(te_id, ASD_dx)) %>%
-  select(-c(devGenes_id, sex, MRI_age)) %>%
-  rename(IID = te_id, ASD = ASD_dx)
+rpoe.all <- full_join(rpoe.cog %>% select(-devGenes_id), rpoe.d.mri.fa) %>%
+  full_join(rpoe.d.mri.md) %>%
+  full_join(rpoe.s.mri) %>%
+  full_join(rpoe.mh %>% inner_join(rpoe.demo %>% select(devGenes_id,te_id))%>%select(-devGenes_id)) %>%
+  full_join(rpoe.f.mri.falff %>% select(-devGenes_id)) %>%
+  full_join(rpoe.f.mri.reho %>% select(-devGenes_id)) %>%
+  full_join(rpoe.demo %>% select(te_id, ASD_dx)) %>%
+  select(-c(sex, MRI_age))
 
 # all(colnames(abcd.all) == colnames(rpoe.all))
 
@@ -407,77 +304,144 @@ rpoe.all <- inner_join(rpoe.cog,
 ################################################################################
 ################################################################################
 ################################################################################
-m1m2 <- read_rds("../../RPOE/shared_data/data/m1m2.rds")
-rpoe.2 <- inner_join(rpoe.cog, rpoe.demo) %>%
-  inner_join(rpoe.mh) %>%
-  inner_join(m1m2)
+# m1m2 <- read_rds("../../RPOE/shared_data/data/m1m2.rds")
+# rpoe.2 <- inner_join(rpoe.cog, rpoe.demo) %>%
+#   inner_join(rpoe.mh) %>%
+#   inner_join(m1m2)
 ################################################################################
 ################################################################################
 ################################################################################
 # train on behavior to predict ASD PGS
 t1 <- abcd.all %>%
   select(ASD, starts_with(c("syn", "dsm"))) %>% ungroup()
-
-glm.model.asd <- glm(ASD ~ ., data = t1 %>% mutate(ASD = as.numeric(ASD)))
-
-
+glm.model.asd <- glm(ASD ~ ., 
+                     data = t1 %>% mutate(ASD = as.numeric(ASD)))
 # apply on RPOE
-predictions.rpoe.glm <- predict(glm.model.asd, 
-                                rpoe.2 %>% select(colnames(t1)[-1]))
-p1 <- rpoe.2 %>%
-  mutate(pred = predictions.rpoe.glm) %>%
-  ggplot(aes(x=ASD_dx, y = pred, fill = ASD_dx)) +
+rpoe.all$pred_ASD <- predict(glm.model.asd, rpoe.all %>% select(colnames(t1)[-1]))
+p1 <- rpoe.all %>%
+  ggplot(aes(x=ASD_dx, y = pred_ASD, fill = ASD_dx)) +
   geom_violin(show.legend = F) +
   geom_boxplot(width = 0.2, fill = "white") +
   ggpubr::stat_compare_means() +
   scale_fill_manual(values = boxplot.colors) +
   labs(y = "predcited ASD") +
   bw.theme
-
+rm(t1)
 
 ################################################################################
 ################################################################################
 ################################################################################
 # train on cognition to predict cognition total
-t2 <- abcd.all %>%
-  select(CP, colnames(abcd.cog2)[-c(1,2)]) %>% ungroup()
-
+t2 <- abcd.all %>% select(CP, colnames(abcd.cog)[-c(1,2)]) %>% ungroup()
 glm.model.cp <- glm(CP ~ ., data = t2)
-# apply on RPOE
-predictions.rpoe.glm.cp <- predict(glm.model.cp,
-                                   rpoe.2 %>% select(colnames(t2)[-1]))
-p2 <- rpoe.2 %>%
-  mutate(pred = predictions.rpoe.glm.cp) %>%
-  ggplot(aes(x=FSIQ, y = pred)) +
+## apply on RPOE
+# you need raw FSIQ scores here for plots
+rpoe.cog.raw.RAW <- read_rds("../../RPOE/shared_data/data/m1m2.rds") %>% select(te_id, RAW_FSIQ=FSIQ)
+
+rpoe.all$pred_CP <- predict(glm.model.cp, rpoe.all %>% select(colnames(t2)[-1]))
+rpoe.all <- rpoe.all %>% left_join(rpoe.cog.raw.RAW)
+p2 <- rpoe.all %>% 
+  ggplot(aes(x=RAW_FSIQ, y = pred_CP)) +
   geom_point(shape = 1) +
   geom_smooth(method = "lm", color = six.colors[3]) +
   ggpubr::stat_cor() +
   labs(y = "predicted CP") +
   bw.theme
+rm(t2)
 ################################################################################
 ################################################################################
 ################################################################################
-# train on cognition and behavior to predict ASD PGS
-t8 <- abcd.all %>%
-  select(ASD, colnames(abcd.cog2)[-c(1,2)], starts_with(c("syn", "dsm"))) %>% ungroup()
-
-glm.model.asd2 <- glm(ASD ~ ., data = t8 %>% mutate(ASD = as.numeric(ASD)))
-# apply on RPOE
-predictions.rpoe.glm.asd2 <- predict(glm.model.asd2,
-                                     rpoe.2 %>% select(colnames(t8)[-1]))
-p8 <- rpoe.2 %>%
-  mutate(pred = predictions.rpoe.glm.asd2) %>%
-  ggplot(aes(x=ASD_dx, y = pred, fill = ASD_dx)) +
-  geom_violin(show.legend = F) +
-  geom_boxplot(width = 0.2, fill = "white") +
-  ggpubr::stat_compare_means() +
-  scale_fill_manual(values = boxplot.colors) +
-  labs(y = "predcited ASD using NIH-TB") +
-  bw.theme
 ################################################################################
 ################################################################################
+################################################################################
+################################################################################
+# save
+save(list = c("rpoe.all", "abcd.all"), file = "data/derivatives/cleaned-data.rda")
 # save the models
 save(glm.model.asd, glm.model.cp, file = "data/derivatives/glm-models-ASD-CP.rda")
+################################################################################
+################################################################################
+################################################################################
+patchwork::wrap_plots(p1,p2)
+ggsave2("figs/models-predictions-on-RPOE.png", width = 7, height =4)
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+# # train on cognition and behavior to predict ASD PGS
+# t8 <- abcd.all %>% select(ASD, colnames(abcd.cog)[-c(1,2)], starts_with(c("syn", "dsm"))) %>% ungroup()
+# 
+# glm.model.asd2 <- glm(ASD ~ ., data = t8 %>% mutate(ASD = as.numeric(ASD)))
+# # apply on RPOE
+# predictions.rpoe.glm.asd2 <- predict(glm.model.asd2,rpoe.all %>% select(colnames(t8)[-1]))
+# p8 <- rpoe.all %>%
+#   mutate(pred = predictions.rpoe.glm.asd2) %>%
+#   ggplot(aes(x=ASD_dx, y = pred, fill = ASD_dx)) +
+#   geom_violin(show.legend = F) +
+#   geom_boxplot(width = 0.2, fill = "white") +
+#   ggpubr::stat_compare_means() +
+#   scale_fill_manual(values = boxplot.colors) +
+#   labs(y = "predcited ASD using NIH-TB") +
+#   bw.theme
+# rm(t8)
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
 ################################################################################
 ################################################################################
 ################################################################################
@@ -485,21 +449,12 @@ save(glm.model.asd, glm.model.cp, file = "data/derivatives/glm-models-ASD-CP.rda
 groups <- c("2e", "ASD, not gifted", "gifted, no dx", "no dx, not gifted")
 # groups <- c("2e", "either dx, not gifted", "gifted, no dx", "no dx, not gifted")
 
-t3 <- rpoe.2 %>%
-  mutate(pred_ASD = predictions.rpoe.glm,
-         pred_CP = predictions.rpoe.glm.cp) %>%
-  mutate(category = 
-           case_when(ASD_dx == T & FSIQ >= 120 ~ "2e",
-                     ASD_dx == T & FSIQ < 120 ~ "ASD, not gifted",
-                     ASD_dx == F & FSIQ >= 120 ~ "gifted, no dx",
-                     ASD_dx == F & FSIQ < 120 ~ "no dx, not gifted"
-                     
-                     # c(ASD_dx == T | ADHD_dx == T) & FSIQ >= 120 ~ groups[1],
-                     # c(ASD_dx == T | ADHD_dx == T) & FSIQ < 120 ~ groups[2],
-                     # !c(ASD_dx == T | ADHD_dx == T) & FSIQ >= 120 ~ groups[3],
-                     # !c(ASD_dx == T | ADHD_dx == T) & FSIQ < 120 ~ groups[4]
-                     )) %>%
-  select(te_id, category, starts_with("pred"), ASD_dx, FSIQ) %>%
+t3 <- rpoe.all %>%
+  mutate(category = case_when(ASD_dx == T & RAW_FSIQ >= 120 ~ "2e",
+                              ASD_dx == T & RAW_FSIQ < 120 ~ "ASD, not gifted",
+                              ASD_dx == F & RAW_FSIQ >= 120 ~ "gifted, no dx",
+                              ASD_dx == F & RAW_FSIQ < 120 ~ "no dx, not gifted")) %>%
+  select(te_id, category, starts_with("pred"), ASD_dx, RAW_FSIQ) %>%
   mutate_at(.vars = vars(starts_with("pred")), function(x) scale(x, T, T)[,1]) %>%
   drop_na(pred_ASD, pred_CP) %>%
   mutate(pred_ASD2 = ifelse(pred_ASD >= median(pred_ASD), "High", "Low"),
@@ -511,10 +466,7 @@ t3 <- rpoe.2 %>%
   
 p3 <- t3 %>%
   ggplot(aes(x=pred_ASD, y = pred_CP, 
-             # color = ASD_dx
-             # color = FSIQ > 120
-             color = category
-             )) +
+             color = category)) +
   geom_point(size = 2, show.legend = F) +
   geom_vline(xintercept = 0, linetype = 2, color = "red") +
   geom_hline(yintercept = 0, linetype = 2, color = "red") +
@@ -525,10 +477,10 @@ p3 <- t3 %>%
 p4 <- t3 %>%
   ggplot(aes(x = quadrant, fill = category)) +
   geom_bar() +
-  annotate("text", x = 2, y = 20, 
+  annotate("text", x = 2, y = 24, 
            label = paste("Fisher's Test; ", 
                          "p-value:", 
-                         round(fisher.test(table(t3$category, t3$quadrant))$p.value, 4))) +
+                         round(fisher.test(table(t3$category, t3$quadrant), simulate.p.value = T)$p.value, 4))) +
   scale_fill_manual(values = six.colors, name = "") +
   bw.theme +
   labs(y = "count") +
@@ -555,130 +507,120 @@ p5 <- t3 %>%
 
 patchwork::wrap_plots(patchwork::wrap_plots(p1,p2, p3), 
                       patchwork::wrap_plots(p4, p5, nrow = 1, widths = c(1,2)), ncol = 1)
-ggsave("figs/models-predictions-on-RPOE_V2.png", bg = "white",
-       width = 12, height = 10, units = "in", dpi = 360)
+ggsave2("figs/models-predictions-on-RPOE_V2.png", width = 12, height = 10)
 
 ################################################################################
 ################################################################################
-# check what MRI metrics are correlated with that ASD continuous prediction
-
-# DTI
-t3 %>%
-  inner_join(rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.demo) %>%
-  ggplot(aes(x=MRI_age)) +
-  geom_histogram()
-t3 %>%
-  inner_join(rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  # inner_join(rpoe.demo) %>% filter(MRI_age < 600) %>%
-  pivot_longer(cols = c(colnames(rpoe.d.mri.fa3)[-c(1:3)], colnames(rpoe.d.mri.md3)[-c(1:3)])) %>%
-  filter(!grepl("SuperiorLongi|Uncinate", name)) %>% # those are not significant
-  mutate(name = sub("ProjectionBasalGanglia_", "", name),
-         name = sub("Association_", "", name),
-         name = sub("Commissure_", "", name),
-         metric = case_when(grepl("dti_fa*",name) ~ "FA",
-                            grepl("md_*",name) ~ "MD"),
-         name = sub(".*__", "", name)) %>%
-  drop_na(pred_ASD, value) %>%
-  ggplot(aes(x=pred_ASD, y = value)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
-                     scales = "free") +
-  labs(x = "predicted ASD", y = "DTI value") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
-ggsave("figs/predicted-ASD_RPOE_DTI.png", bg = "white",
-       width = 7, height = 10, units = "in", dpi = 360)
-
-# resting-state
-# no correlations with any of the networks ReHo or fALFF
-# t3 %>%
-#   left_join(rpoe.f.mri.falff2) %>%
-#   left_join(rpoe.f.mri.reho2) %>%
-#   pivot_longer(cols = c(colnames(rpoe.f.mri.falff2)[-c(1)], colnames(rpoe.f.mri.reho2)[-c(1)])) %>%
-#   mutate(metric = sub("__.*", "", name),
-#          name = sub(".*__", "", name)) %>%
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+################################################################################
+# # check what MRI metrics are correlated with that ASD continuous prediction
+# 
+# # DTI
+# t3 %>% inner_join(rpoe.d.mri.fa) %>% inner_join(rpoe.d.mri.md) %>% inner_join(rpoe.demo) %>%
+#   ggplot(aes(x=MRI_age)) + geom_histogram()
+# t3 %>% inner_join(rpoe.d.mri.fa) %>% inner_join(rpoe.d.mri.md) %>%
+#   # inner_join(rpoe.demo) %>% filter(MRI_age < 600) %>%
+#   pivot_longer(cols = c(colnames(rpoe.d.mri.fa)[-c(1:3)], colnames(rpoe.d.mri.md)[-c(1:3)])) %>%
+#   filter(!grepl("SuperiorLongi|Uncinate", name)) %>% # those are not significant
+#   mutate(name = sub("ProjectionBasalGanglia_", "", name), name = sub("Association_", "", name),name = sub("Commissure_", "", name), 
+#          metric = case_when(grepl("dti_fa*",name) ~ "FA", grepl("md_*",name) ~ "MD"), name = sub(".*__", "", name)) %>%
 #   drop_na(pred_ASD, value) %>%
 #   ggplot(aes(x=pred_ASD, y = value)) +
+#   geom_point(shape = 1) +geom_smooth(method = "lm", color = six.colors[3]) +
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),label = ifelse(..p.value.. < 0.05, label, "")),show.legend = F, na.rm = T) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), scales = "free") +
+#   labs(x = "predicted ASD", y = "DTI value") +bw.theme + theme(strip.text.y.right = element_text(angle = 0))
+# ggsave2("figs/predicted-ASD_RPOE_DTI.png", width = 7, height = 10)
+# 
+# # resting-state FALFF
+# tt4 <- corr.table(x = t3%>%left_join(rpoe.f.mri.falff)%>%select(pred_ASD,pred_CP),
+#            y = t3%>%left_join(rpoe.f.mri.falff)%>%select(colnames(rpoe.f.mri.falff)[-1])) %>%
+#   filter(grepl("pred_",V1),!grepl("pred_",V2),pval<0.05) %>%
+#   mutate(hemisphere = case_when(grepl("__LH_", V2) ~ "left",grepl("__RH_", V2) ~ "right",
+#                                 grepl("__Left-", V2) ~ "left",grepl("__Right-", V2) ~ "right"),
+#          struct = sub("fALFF__", "",V2),
+#          struct = sub(".H_", "", struct), struct = sub("Left-", "", struct),struct = sub("Right-", "", struct))
+# t3 %>%
+#   left_join(rpoe.f.mri.falff) %>%
+#   pivot_longer(cols = c(colnames(rpoe.f.mri.falff)[-c(1)])) %>%
+#   drop_na(pred_ASD, value) %>% inner_join(tt4 %>% rename(name = V2)) %>%
+#   ggplot(aes(x=pred_ASD, y = value, color = hemisphere)) +
+#   geom_point(shape = 1) +geom_smooth(method = "lm") +
+#   ggpubr::stat_cor(show.legend = F) + facet_wrap(~struct) +
+#   scale_color_manual(values = antique.colors) +
+#   labs(x = "predicted ASD", y = "fALFF value\n(corrected for age and sex)") +
+#   bw.theme + theme(strip.text.y.right = element_text(angle = 0))
+# ggsave2("figs/predicted-ASD_RPOE_fALFF.png", width = 12, height = 10)
+# rm(tt4)
+# 
+# # language
+# rpoe.psvc <- read_rds("../../RPOE/language/data/derivatives/summarized-metrics-psvc.rds")
+# inner_join(t3, rpoe.psvc) %>% pivot_longer(cols = colnames(rpoe.psvc)[-1]) %>%
+#   pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+#   ggplot(aes(x=pred_val, y = value)) +
 #   geom_point(shape = 1) +
 #   geom_smooth(method = "lm", color = six.colors[3]) +
-#   ggpubr::stat_cor() +
-#   ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"), label = ifelse(..p.value.. < 0.1, label, "")), show.legend = F, na.rm = T, size = 3) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   ggh4x::facet_grid2(rows = vars(name), cols = vars(pred), scales = "free") +
+#   labs(x = "predicted value", y = "language metric value") +
+#   bw.theme + theme(strip.text.y.right = element_text(angle = 0))
+# ggsave2("figs/predicted-ASD-CP_RPOE_language.png", width = 6, height = 14)
+
+# 
+# # falff
+# inner_join(t3, rpoe.f.mri.falff2) %>%
+#   pivot_longer(cols = colnames(rpoe.f.mri.falff2)[-1]) %>%
+#   pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+#   ggplot(aes(x=pred_val, y = value)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm", color = six.colors[3]) +
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+#                        label = ifelse(..p.value.. < 0.1, label, "")),
+#                    show.legend = F, na.rm = T, size = 3) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   ggh4x::facet_grid2(rows = vars(name), 
+#                      cols = vars(pred), 
 #                      scales = "free") +
-#   labs(x = "predicted ASD", y = "DTI value") +
+#   labs(x = "predicted value", y = "fALFF value") +
 #   bw.theme +
 #   theme(strip.text.y.right = element_text(angle = 0))
-
-# language
-rpoe.psvc <- read_rds("../../RPOE/language/data/derivatives/summarized-metrics-psvc.rds")
-inner_join(t3, rpoe.psvc) %>%
-  pivot_longer(cols = colnames(rpoe.psvc)[-1]) %>%
-  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
-  ggplot(aes(x=pred_val, y = value)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T, size = 3) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  ggh4x::facet_grid2(rows = vars(name), 
-                     cols = vars(pred), 
-                     scales = "free") +
-  labs(x = "predicted value", y = "language metric value") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
-ggsave("figs/predicted-ASD-CP_RPOE_language.png", bg = "white",
-       width = 6, height = 14, units = "in", dpi = 360)
+# ggsave("figs/predicted-ASD-CP_RPOE_fALFF.png", bg = "white",
+#        width = 5, height = 9, units = "in", dpi = 360)
 
 
-# falff
-inner_join(t3, rpoe.f.mri.falff2) %>%
-  pivot_longer(cols = colnames(rpoe.f.mri.falff2)[-1]) %>%
-  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
-  ggplot(aes(x=pred_val, y = value)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T, size = 3) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  ggh4x::facet_grid2(rows = vars(name), 
-                     cols = vars(pred), 
-                     scales = "free") +
-  labs(x = "predicted value", y = "fALFF value") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
-ggsave("figs/predicted-ASD-CP_RPOE_fALFF.png", bg = "white",
-       width = 5, height = 9, units = "in", dpi = 360)
-
-
-# reho
-inner_join(t3, rpoe.f.mri.reho2) %>%
-  pivot_longer(cols = colnames(rpoe.f.mri.reho2)[-1]) %>%
-  pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
-  ggplot(aes(x=pred_val, y = value)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T, size = 3) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  ggh4x::facet_grid2(rows = vars(name), 
-                     cols = vars(pred), 
-                     scales = "free") +
-  labs(x = "predicted value", y = "ReHo value") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
-ggsave("figs/predicted-ASD-CP_RPOE_ReHo.png", bg = "white",
-       width = 5, height = 9, units = "in", dpi = 360)
-
+# # reho
+# inner_join(t3, rpoe.f.mri.reho2) %>%
+#   pivot_longer(cols = colnames(rpoe.f.mri.reho2)[-1]) %>%
+#   pivot_longer(cols = c(pred_ASD, pred_CP), names_to = "pred", values_to = "pred_val") %>%
+#   ggplot(aes(x=pred_val, y = value)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm", color = six.colors[3]) +
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+#                        label = ifelse(..p.value.. < 0.1, label, "")),
+#                    show.legend = F, na.rm = T, size = 3) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   ggh4x::facet_grid2(rows = vars(name), 
+#                      cols = vars(pred), 
+#                      scales = "free") +
+#   labs(x = "predicted value", y = "ReHo value") +
+#   bw.theme +
+#   theme(strip.text.y.right = element_text(angle = 0))
+# ggsave("figs/predicted-ASD-CP_RPOE_ReHo.png", bg = "white",
+#        width = 5, height = 9, units = "in", dpi = 360)
+# 
 
 
 ################################################################################
@@ -717,51 +659,42 @@ ggsave("figs/predicted-ASD-CP_RPOE_ReHo.png", bg = "white",
 ################################################################################
 ################################################################################
 # check how cognition and pred_ASD interact
-
-tmp <- t3 %>% select(-FSIQ) %>%
-  inner_join(rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.cog.raw)
-
-summary(glm(dti_fa__Commissure_CorpusCallosum ~ pred_ASD*pred_CP, 
-            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, 
-                                  pred_ASD, pred_CP,
-                                  colnames(rpoe.cog.raw)[c(13:16)])))
-summary(glm(FSIQ ~ pred_ASD*dti_fa__Commissure_CorpusCallosum, 
-            data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, 
-                                  ASD_dx,
-                                  colnames(rpoe.cog.raw)[c(13:16)])))
-
-
-cat2 <- c("High ASD, High FSIQ","High ASD, Low FSIQ","Low ASD, High FSIQ","Low ASD, Low FSIQ")
-t4 <- t3 %>% select(-FSIQ) %>%
-  inner_join(rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  inner_join(rpoe.cog.raw) %>% 
-  mutate(cat2 = case_when(c(pred_ASD >= median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "High ASD, High FSIQ",
-                          c(pred_ASD >= median(pred_ASD) & FSIQ < median(FSIQ)) ~ "High ASD, Low FSIQ",
-                          c(pred_ASD < median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "Low ASD, High FSIQ",
-                          c(pred_ASD < median(pred_ASD) & FSIQ < median(FSIQ)) ~ "Low ASD, Low FSIQ"))
-t4 %>%
-  pivot_longer(cols = contains("Corpus")) %>%
-  mutate(name = sub("_Commissure_", "", name),
-         name = sub("dti_fa", "FA_", name),
-         name = sub("md_", "MD_", name)) %>%
-  ggplot(aes(x = cat2, y = value, fill = cat2)) +
-  geom_violin(show.legend = F) + geom_boxplot(fill = "white", width = 0.2) +
-  ggpubr::stat_compare_means(vjust = 0.35, size = 3.5,
-                             comparisons = combn(cat2, 2, simplify = F)) +
-  scale_fill_manual(values = six.colors) +
-  facet_wrap(~name, scales = "free_y", nrow = 2) +
-  labs(x= "", y = "DTI value (residualized for age and sex)",
-       caption = paste0("n(", cat2[1], "): ", sum(t4$cat2 == cat2[1]), "\n",
-                        "n(", cat2[2], "): ", sum(t4$cat2 == cat2[2]), "\n",
-                        "n(", cat2[3], "): ", sum(t4$cat2 == cat2[3]), "\n",
-                        "n(", cat2[4], "): ", sum(t4$cat2 == cat2[4]), "\n")) +
-  bw.theme +
-  theme(axis.text.x.bottom =  element_text(angle = 45, hjust = 1))
-ggsave("figs/predicted-ASD_RPOE_DTI-2e.png", bg = "white",
-       width = 5, height = 8, units = "in", dpi = 360)
+# 
+# tmp <- t3 %>% inner_join(rpoe.d.mri.fa) %>% inner_join(rpoe.d.mri.md) %>%inner_join(rpoe.cog.raw)
+# summary(glm(dti_fa__Commissure_CorpusCallosum ~ pred_ASD*pred_CP, 
+#             data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, pred_CP,colnames(rpoe.cog.raw)[c(13:16)])))
+# summary(glm(FSIQ ~ pred_ASD*dti_fa__Commissure_CorpusCallosum, 
+#             data = tmp %>% select(dti_fa__Commissure_CorpusCallosum, pred_ASD, ASD_dx,colnames(rpoe.cog.raw)[c(13:16)])))
+# 
+# 
+# cat2 <- c("High ASD, High FSIQ","High ASD, Low FSIQ","Low ASD, High FSIQ","Low ASD, Low FSIQ")
+# t4 <- t3 %>% 
+#   inner_join(rpoe.d.mri.fa) %>%
+#   inner_join(rpoe.d.mri.md) %>%
+#   inner_join(rpoe.cog.raw) %>% 
+#   mutate(cat2 = case_when(c(pred_ASD >= median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "High ASD, High FSIQ",
+#                           c(pred_ASD >= median(pred_ASD) & FSIQ < median(FSIQ)) ~ "High ASD, Low FSIQ",
+#                           c(pred_ASD < median(pred_ASD) & FSIQ >= median(FSIQ)) ~ "Low ASD, High FSIQ",
+#                           c(pred_ASD < median(pred_ASD) & FSIQ < median(FSIQ)) ~ "Low ASD, Low FSIQ"))
+# t4 %>%
+#   pivot_longer(cols = contains("Corpus")) %>%
+#   mutate(name = sub("_Commissure_", "", name),
+#          name = sub("dti_fa", "FA_", name),
+#          name = sub("md_", "MD_", name)) %>%
+#   ggplot(aes(x = cat2, y = value, fill = cat2)) +
+#   geom_violin(show.legend = F) + geom_boxplot(fill = "white", width = 0.2) +
+#   ggpubr::stat_compare_means(vjust = 0.35, size = 3.5,
+#                              comparisons = combn(cat2, 2, simplify = F)) +
+#   scale_fill_manual(values = six.colors) +
+#   facet_wrap(~name, scales = "free_y", nrow = 2) +
+#   labs(x= "", y = "DTI value (residualized for age and sex)",
+#        caption = paste0("n(", cat2[1], "): ", sum(t4$cat2 == cat2[1]), "\n",
+#                         "n(", cat2[2], "): ", sum(t4$cat2 == cat2[2]), "\n",
+#                         "n(", cat2[3], "): ", sum(t4$cat2 == cat2[3]), "\n",
+#                         "n(", cat2[4], "): ", sum(t4$cat2 == cat2[4]), "\n")) +
+#   bw.theme +
+#   theme(axis.text.x.bottom =  element_text(angle = 45, hjust = 1))
+# ggsave2("figs/predicted-ASD_RPOE_DTI-2e.png", width = 5, height = 8)
 
 
 ################################################################################
@@ -810,78 +743,78 @@ ggsave("figs/predicted-ASD_RPOE_DTI-2e.png", bg = "white",
 ################################################################################
 ################################################################################
 # theoretical mapping of pred_CP and pred_ASD on one axis
-t3 %>%
-  ggplot(aes(x=pred_ASD, y = pred_CP)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "glm") +
-  ggpubr::stat_cor(method = "spearman")
-
-pc <- princomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
-
-pc2 <- prcomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
-
-
-pc$scores[,1]
-pp1 <- t3 %>%
-  mutate(pc1_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_ASD, y = pc1_score)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm") +
-  ggpubr::stat_cor() +
-  bw.theme
-pp2 <- t3 %>%
-  mutate(pc1_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_CP, y = pc1_score)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm") +
-  ggpubr::stat_cor() +
-  bw.theme
-
-
-pp3 <- t3 %>%
-  mutate(pc1_score = pc$scores[,1]) %>%
-  ggplot(aes(x=pred_ASD, y = pred_CP, size = abs(pc1_score))) +
-  geom_point(shape = 1, aes(color = as.factor(sign(pc1_score)))) +
-  geom_vline(xintercept = 0, color = "pink", linetype = 2) +
-  geom_hline(yintercept = 0, color = "pink", linetype = 2) +
-  scale_color_manual(values = redblu.col[c(2,1)],
-                     name = "PC-score sign") +
-  scale_size_continuous(name = "abs(PC-score)") +
-  bw.theme
-
-patchwork::wrap_plots(pp1, pp2, pp3, ncol = 1)
-ggsave("figs/predicted-ASD-CP_PC1-score.png", bg = "white",
-       width = 7, height = 13, units = "in", dpi = 360)
-
-# try to correlate that combined score with other MRI metrics
-
-t3 %>%
-  mutate(pc_score = pc$scores[,1]) %>%
-  inner_join(rpoe.d.mri.fa3) %>%
-  inner_join(rpoe.d.mri.md3) %>%
-  pivot_longer(cols = c(colnames(rpoe.d.mri.fa3)[-c(1:3)], colnames(rpoe.d.mri.md3)[-c(1:3)])) %>%
-  filter(grepl("Corpus|TractR|Inferior", name)) %>% # those are not significant
-  mutate(name = sub("ProjectionBasalGanglia_", "", name),
-         name = sub("Association_", "", name),
-         name = sub("Commissure_", "", name),
-         metric = case_when(grepl("dti_fa*",name) ~ "FA",
-                            grepl("md_*",name) ~ "MD"),
-         name = sub(".*__", "", name)) %>%
-  drop_na(pc_score, value) %>%
-  ggplot(aes(x=pc_score, y = value)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
-                     scales = "free") +
-  labs(x = "PC1 score", y = "DTI value") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
-ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
-       width = 7, height = 8.5, units = "in", dpi = 360)
+# t3 %>%
+#   ggplot(aes(x=pred_ASD, y = pred_CP)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "glm") +
+#   ggpubr::stat_cor(method = "spearman")
+# 
+# pc <- princomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
+# 
+# pc2 <- prcomp(t3 %>% select(pred_CP, pred_ASD) %>% as.matrix() %>% scale())
+# 
+# 
+# pc$scores[,1]
+# pp1 <- t3 %>%
+#   mutate(pc1_score = pc$scores[,1]) %>%
+#   ggplot(aes(x=pred_ASD, y = pc1_score)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm") +
+#   ggpubr::stat_cor() +
+#   bw.theme
+# pp2 <- t3 %>%
+#   mutate(pc1_score = pc$scores[,1]) %>%
+#   ggplot(aes(x=pred_CP, y = pc1_score)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm") +
+#   ggpubr::stat_cor() +
+#   bw.theme
+# 
+# 
+# pp3 <- t3 %>%
+#   mutate(pc1_score = pc$scores[,1]) %>%
+#   ggplot(aes(x=pred_ASD, y = pred_CP, size = abs(pc1_score))) +
+#   geom_point(shape = 1, aes(color = as.factor(sign(pc1_score)))) +
+#   geom_vline(xintercept = 0, color = "pink", linetype = 2) +
+#   geom_hline(yintercept = 0, color = "pink", linetype = 2) +
+#   scale_color_manual(values = redblu.col[c(2,1)],
+#                      name = "PC-score sign") +
+#   scale_size_continuous(name = "abs(PC-score)") +
+#   bw.theme
+# 
+# patchwork::wrap_plots(pp1, pp2, pp3, ncol = 1)
+# ggsave("figs/predicted-ASD-CP_PC1-score.png", bg = "white",
+#        width = 7, height = 13, units = "in", dpi = 360)
+# 
+# # try to correlate that combined score with other MRI metrics
+# 
+# t3 %>%
+#   mutate(pc_score = pc$scores[,1]) %>%
+#   inner_join(rpoe.d.mri.fa3) %>%
+#   inner_join(rpoe.d.mri.md3) %>%
+#   pivot_longer(cols = c(colnames(rpoe.d.mri.fa3)[-c(1:3)], colnames(rpoe.d.mri.md3)[-c(1:3)])) %>%
+#   filter(grepl("Corpus|TractR|Inferior", name)) %>% # those are not significant
+#   mutate(name = sub("ProjectionBasalGanglia_", "", name),
+#          name = sub("Association_", "", name),
+#          name = sub("Commissure_", "", name),
+#          metric = case_when(grepl("dti_fa*",name) ~ "FA",
+#                             grepl("md_*",name) ~ "MD"),
+#          name = sub(".*__", "", name)) %>%
+#   drop_na(pc_score, value) %>%
+#   ggplot(aes(x=pc_score, y = value)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm", color = six.colors[3]) +
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+#                        label = ifelse(..p.value.. < 0.1, label, "")),
+#                    show.legend = F, na.rm = T) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   ggh4x::facet_grid2(rows = vars(name), cols = vars(metric), 
+#                      scales = "free") +
+#   labs(x = "PC1 score", y = "DTI value") +
+#   bw.theme +
+#   theme(strip.text.y.right = element_text(angle = 0))
+# ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
+#        width = 7, height = 8.5, units = "in", dpi = 360)
 
 # 
 # m0 <- lm(pred_CP ~ pred_ASD, data = t3)
@@ -915,25 +848,25 @@ ggsave("figs/PC1_RPOE_DTI.png", bg = "white",
 ################################################################################
 ################################################################################
 ################################################################################
-# correlate ASD PGS with DTI in ABCD
-abcd.d.mri.fa3 %>%
-  inner_join(abcd.pgs) %>%
-  pivot_longer(cols = starts_with("dti")) %>%
-  mutate(name = sub("dti_fa__", "", sub("Association_", "",
-                                      name)),
-         name = sub("ProjectionBasalGanglia_", "", name)) %>%
-  filter(abs(value) <=6) %>%
-  ggplot(aes(x=value, y = ASD)) +
-  geom_point(shape = 1) +
-  geom_smooth(method = "lm", color = six.colors[3]) +
-  ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
-                       label = ifelse(..p.value.. < 0.1, label, "")),
-                   show.legend = F, na.rm = T) +
-  scale_color_manual(values = redblu.col[c(2,1)]) +
-  facet_wrap(~name, scales = "free") +
-  labs(x = "DTI value", y = "ASD_PGS") +
-  bw.theme +
-  theme(strip.text.y.right = element_text(angle = 0))
+# # correlate ASD PGS with DTI in ABCD
+# abcd.d.mri.fa3 %>%
+#   inner_join(abcd.pgs) %>%
+#   pivot_longer(cols = starts_with("dti")) %>%
+#   mutate(name = sub("dti_fa__", "", sub("Association_", "",
+#                                       name)),
+#          name = sub("ProjectionBasalGanglia_", "", name)) %>%
+#   filter(abs(value) <=6) %>%
+#   ggplot(aes(x=value, y = ASD)) +
+#   geom_point(shape = 1) +
+#   geom_smooth(method = "lm", color = six.colors[3]) +
+#   ggpubr::stat_cor(aes(color = ifelse(..r.. > 0, "red", "blue"),
+#                        label = ifelse(..p.value.. < 0.1, label, "")),
+#                    show.legend = F, na.rm = T) +
+#   scale_color_manual(values = redblu.col[c(2,1)]) +
+#   facet_wrap(~name, scales = "free") +
+#   labs(x = "DTI value", y = "ASD_PGS") +
+#   bw.theme +
+#   theme(strip.text.y.right = element_text(angle = 0))
 
 ################################################################################
 ################################################################################
